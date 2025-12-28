@@ -1,12 +1,59 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@shared/ui'
-import { Settings, Key, RefreshCw, Power, AlertTriangle } from 'lucide-react'
+import { Settings, Key, RefreshCw, Power, AlertTriangle, Radio, CheckCircle, XCircle, RotateCcw, Loader2 } from 'lucide-react'
 import { dxApi } from '@features/dx'
-import { useState } from 'react'
+import { useMediaMTXSettings, useUpdateMediaMTXSettings, useResetMediaMTXSettings, useTestMediaMTXConnection } from '@features/mediamtx'
+import { useState, useEffect } from 'react'
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const [licenseKey, setLicenseKey] = useState('')
+
+  // MediaMTX state
+  const [mediamtxForm, setMediamtxForm] = useState({
+    api_url: '',
+    hls_url: '',
+    webrtc_url: '',
+    rtsp_url: '',
+    enabled: true,
+  })
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+
+  // MediaMTX hooks
+  const { data: mediamtxSettings, isLoading: mediamtxLoading } = useMediaMTXSettings()
+  const updateMediamtxMutation = useUpdateMediaMTXSettings()
+  const resetMediamtxMutation = useResetMediaMTXSettings()
+  const testMediamtxMutation = useTestMediaMTXConnection()
+
+  // Sync form with fetched settings
+  useEffect(() => {
+    if (mediamtxSettings) {
+      setMediamtxForm({
+        api_url: mediamtxSettings.api_url,
+        hls_url: mediamtxSettings.hls_url,
+        webrtc_url: mediamtxSettings.webrtc_url,
+        rtsp_url: mediamtxSettings.rtsp_url,
+        enabled: mediamtxSettings.enabled,
+      })
+    }
+  }, [mediamtxSettings])
+
+  const handleMediamtxSave = () => {
+    updateMediamtxMutation.mutate(mediamtxForm, {
+      onSuccess: () => setTestResult(null),
+    })
+  }
+
+  const handleMediamtxReset = () => {
+    resetMediamtxMutation.mutate(undefined, {
+      onSuccess: () => setTestResult(null),
+    })
+  }
+
+  const handleMediamtxTest = async () => {
+    const result = await testMediamtxMutation.mutateAsync()
+    setTestResult(result)
+  }
 
   const { data: dx, isLoading: dxLoading } = useQuery({
     queryKey: ['dx'],
@@ -171,6 +218,137 @@ export function SettingsPage() {
                     disabled={!licenseKey || activateLicenseMutation.isPending}
                   >
                     Activate
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* MediaMTX Settings */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="h-5 w-5" />
+              MediaMTX Settings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {mediamtxLoading ? (
+              <div className="animate-pulse space-y-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-10 rounded bg-muted" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">API URL</label>
+                    <Input
+                      value={mediamtxForm.api_url}
+                      onChange={(e) =>
+                        setMediamtxForm((prev) => ({ ...prev, api_url: e.target.value }))
+                      }
+                      placeholder="http://localhost:9997/v3"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">HLS URL</label>
+                    <Input
+                      value={mediamtxForm.hls_url}
+                      onChange={(e) =>
+                        setMediamtxForm((prev) => ({ ...prev, hls_url: e.target.value }))
+                      }
+                      placeholder="http://localhost:8888"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">WebRTC URL</label>
+                    <Input
+                      value={mediamtxForm.webrtc_url}
+                      onChange={(e) =>
+                        setMediamtxForm((prev) => ({ ...prev, webrtc_url: e.target.value }))
+                      }
+                      placeholder="http://localhost:8889"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">RTSP URL</label>
+                    <Input
+                      value={mediamtxForm.rtsp_url}
+                      onChange={(e) =>
+                        setMediamtxForm((prev) => ({ ...prev, rtsp_url: e.target.value }))
+                      }
+                      placeholder="rtsp://localhost:8554"
+                    />
+                  </div>
+                </div>
+
+                {/* Enable/Disable toggle */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="mediamtx-enabled"
+                    checked={mediamtxForm.enabled}
+                    onChange={(e) =>
+                      setMediamtxForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                    }
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="mediamtx-enabled" className="text-sm">
+                    Enable MediaMTX integration
+                  </label>
+                </div>
+
+                {/* Test result */}
+                {testResult && (
+                  <div
+                    className={`flex items-center gap-2 rounded-md p-3 text-sm ${
+                      testResult.success
+                        ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                        : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                    }`}
+                  >
+                    {testResult.success ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    {testResult.message}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleMediamtxTest}
+                    disabled={testMediamtxMutation.isPending}
+                  >
+                    {testMediamtxMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Radio className="mr-2 h-4 w-4" />
+                    )}
+                    Test Connection
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleMediamtxReset}
+                    disabled={resetMediamtxMutation.isPending}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset to Defaults
+                  </Button>
+                  <Button
+                    onClick={handleMediamtxSave}
+                    disabled={updateMediamtxMutation.isPending}
+                  >
+                    {updateMediamtxMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Save Settings
                   </Button>
                 </div>
               </div>
