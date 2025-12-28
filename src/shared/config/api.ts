@@ -32,6 +32,12 @@ export const API_CONFIG = {
 
     // Sensor
     sensor: '/v2/sensor',
+
+    // System
+    system: '/v2/system',
+
+    // Statistics
+    statistics: '/v2/statistics',
   },
 } as const
 

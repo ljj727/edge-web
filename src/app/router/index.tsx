@@ -8,7 +8,7 @@ import { DashboardPage } from '@pages/dashboard'
 import { VideoStreamPage } from '@pages/video-stream'
 import { AnalyticsPage } from '@pages/analytics'
 import { SettingsPage } from '@pages/settings'
-import { EventLogPage } from '@pages/event-log'
+import { StatisticsPage } from '@pages/statistics'
 
 export const router = createBrowserRouter([
   {
@@ -48,12 +48,8 @@ export const router = createBrowserRouter([
         element: <SettingsPage />,
       },
       {
-        path: 'eventLog',
-        element: <EventLogPage />,
-      },
-      {
         path: 'statistics',
-        element: <EventLogPage />,
+        element: <StatisticsPage />,
       },
     ],
   },

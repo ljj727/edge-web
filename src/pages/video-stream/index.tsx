@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@shared/ui'
-import { Plus, Video, Camera, Check, Trash2, RefreshCw, PanelRightClose, PanelRightOpen, CloudDownload } from 'lucide-react'
+import { Plus, Video, Camera, Check, Trash2, RefreshCw, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useCameras, useCreateCamera, useDeleteCamera, useSyncCameras, useCameraStore } from '@features/camera'
-import { useInferencesByVideo, useCreateInference, useDeleteInference } from '@features/inference'
+import { useInferencesByVideo, useCreateInference, useDeleteInference, useInferenceStatuses } from '@features/inference'
 import { CameraGrid } from '@widgets/camera-grid'
 import { CameraForm } from '@widgets/camera-form'
 import { VisionAppPanel, type VisionApp } from '@widgets/vision-app-panel'
@@ -27,18 +27,42 @@ export function VideoStreamPage() {
   const [focusedCameraId, setFocusedCameraId] = useState<string | null>(null)
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
 
+  // Initialize focusedCameraId when cameras load and there are selected cameras
+  useEffect(() => {
+    if (!focusedCameraId && cameras && cameras.length > 0 && selectedCameraIds.length > 0) {
+      // Focus on the first selected camera
+      const firstSelected = cameras.find((c) => selectedCameraIds.includes(c.id))
+      if (firstSelected) {
+        setFocusedCameraId(firstSelected.id)
+      }
+    }
+  }, [cameras, selectedCameraIds, focusedCameraId])
+
   // Inference hooks
   const { data: inferences } = useInferencesByVideo(focusedCameraId || '')
+  const { data: inferenceStatuses } = useInferenceStatuses()
   const createInference = useCreateInference()
   const deleteInference = useDeleteInference()
 
-  // Convert inferences to VisionApp format for display
-  const assignedApps: VisionApp[] = (inferences || []).map((inf) => ({
-    id: inf.appId,
-    name: inf.name || inf.appId,
-    version: '',
-    status: 'connected' as const,
-  }))
+  // Convert inferences to VisionApp format for display with real status
+  const assignedApps: VisionApp[] = (inferences || []).map((inf) => {
+    // Find matching status from inference status API
+    const statusData = inferenceStatuses?.find(
+      (s) => s.appId === inf.appId && s.videoId === focusedCameraId
+    )
+    // Map backend status code to VisionApp status
+    // Backend: NG=0, READY=1, CONNECTING=2, CONNECTED=3
+    const status: VisionApp['status'] =
+      statusData?.err ? 'error' :
+      statusData?.status === 3 ? 'connected' : 'disconnected'
+
+    return {
+      id: inf.appId,
+      name: inf.name || inf.appId,
+      version: '',
+      status,
+    }
+  })
 
   // Event settings state
   const [isEventSettingsOpen, setIsEventSettingsOpen] = useState(false)
@@ -120,19 +144,14 @@ export function VideoStreamPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => syncCameras.mutate()}
+                onClick={async () => {
+                  await syncCameras.mutateAsync()
+                  refetch()
+                }}
                 disabled={syncCameras.isPending}
-                title="Sync from MediaMTX"
+                title="Sync & Refresh"
               >
-                <CloudDownload className={`h-4 w-4 ${syncCameras.isPending ? 'animate-pulse' : ''}`} />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => refetch()}
-                title="Refresh"
-              >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className={`h-4 w-4 ${syncCameras.isPending ? 'animate-spin' : ''}`} />
               </Button>
               <Button
                 size="sm"
@@ -268,7 +287,7 @@ export function VideoStreamPage() {
         )}
       >
         {/* Panel Toggle */}
-        <div className="p-2 border-b flex justify-center">
+        <div className="p-2 border-b flex justify-end">
           <Button
             size="sm"
             variant="ghost"

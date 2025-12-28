@@ -4,7 +4,6 @@ import {
   Video,
   Brain,
   Settings,
-  ClipboardList,
   BarChart3,
   LogOut,
   User,
@@ -16,7 +15,6 @@ const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/videoStream', icon: Video, label: 'Video Stream' },
   { to: '/visionApp', icon: Brain, label: 'Vision Apps' },
-  { to: '/eventLog', icon: ClipboardList, label: 'Event Log' },
   { to: '/statistics', icon: BarChart3, label: 'Statistics' },
   { to: '/systemInfo', icon: Settings, label: 'Settings' },
 ]

@@ -3,18 +3,45 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@shared
 import { Settings, Key, RefreshCw, Power, AlertTriangle, Radio, CheckCircle, XCircle, RotateCcw, Loader2 } from 'lucide-react'
 import { dxApi } from '@features/dx'
 import { useMediaMTXSettings, useUpdateMediaMTXSettings, useResetMediaMTXSettings, useTestMediaMTXConnection } from '@features/mediamtx'
+import { useSystemRestart, type RestartStep } from '@features/system'
 import { useState, useEffect } from 'react'
+import { cn } from '@shared/lib/cn'
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const [licenseKey, setLicenseKey] = useState('')
 
-  // MediaMTX state
-  const [mediamtxForm, setMediamtxForm] = useState({
-    api_url: '',
-    hls_url: '',
-    webrtc_url: '',
-    rtsp_url: '',
+  // System restart state
+  const [restartSteps, setRestartSteps] = useState<RestartStep[]>([])
+  const [isRestarting, setIsRestarting] = useState(false)
+  const { restart } = useSystemRestart()
+
+  const handleRestart = async () => {
+    setIsRestarting(true)
+    setRestartSteps([])
+
+    await restart((step) => {
+      setRestartSteps((prev) => {
+        const existing = prev.findIndex((s) => s.step === step.step)
+        if (existing >= 0) {
+          const updated = [...prev]
+          updated[existing] = step
+          return updated
+        }
+        return [...prev, step]
+      })
+    })
+
+    setIsRestarting(false)
+  }
+
+  // MediaMTX state - simplified to IP + ports
+  const [mxForm, setMxForm] = useState({
+    host: 'localhost',
+    apiPort: '9997',
+    hlsPort: '8888',
+    webrtcPort: '8889',
+    rtspPort: '8554',
     enabled: true,
   })
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -25,21 +52,50 @@ export function SettingsPage() {
   const resetMediamtxMutation = useResetMediaMTXSettings()
   const testMediamtxMutation = useTestMediaMTXConnection()
 
+  // Helper to parse URL into host and port
+  const parseUrl = (url: string, defaultPort: string) => {
+    try {
+      if (url.startsWith('rtsp://')) {
+        const match = url.match(/rtsp:\/\/([^:\/]+):?(\d+)?/)
+        return { host: match?.[1] || 'localhost', port: match?.[2] || defaultPort }
+      }
+      const parsed = new URL(url)
+      return { host: parsed.hostname, port: parsed.port || defaultPort }
+    } catch {
+      return { host: 'localhost', port: defaultPort }
+    }
+  }
+
   // Sync form with fetched settings
   useEffect(() => {
     if (mediamtxSettings) {
-      setMediamtxForm({
-        api_url: mediamtxSettings.api_url,
-        hls_url: mediamtxSettings.hls_url,
-        webrtc_url: mediamtxSettings.webrtc_url,
-        rtsp_url: mediamtxSettings.rtsp_url,
+      const api = parseUrl(mediamtxSettings.api_url, '9997')
+      const hls = parseUrl(mediamtxSettings.hls_url, '8888')
+      const webrtc = parseUrl(mediamtxSettings.webrtc_url, '8889')
+      const rtsp = parseUrl(mediamtxSettings.rtsp_url, '8554')
+
+      setMxForm({
+        host: api.host,
+        apiPort: api.port,
+        hlsPort: hls.port,
+        webrtcPort: webrtc.port,
+        rtspPort: rtsp.port,
         enabled: mediamtxSettings.enabled,
       })
     }
   }, [mediamtxSettings])
 
+  // Build full URLs from host + ports for backend
+  const buildUrls = () => ({
+    api_url: `http://${mxForm.host}:${mxForm.apiPort}/v3`,
+    hls_url: `http://${mxForm.host}:${mxForm.hlsPort}`,
+    webrtc_url: `http://${mxForm.host}:${mxForm.webrtcPort}`,
+    rtsp_url: `rtsp://${mxForm.host}:${mxForm.rtspPort}`,
+    enabled: mxForm.enabled,
+  })
+
   const handleMediamtxSave = () => {
-    updateMediamtxMutation.mutate(mediamtxForm, {
+    updateMediamtxMutation.mutate(buildUrls(), {
       onSuccess: () => setTestResult(null),
     })
   }
@@ -65,12 +121,6 @@ export function SettingsPage() {
     queryFn: dxApi.getLicense,
   })
 
-  const restartMutation = useMutation({
-    mutationFn: dxApi.restart,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dx-status'] })
-    },
-  })
 
   const activateLicenseMutation = useMutation({
     mutationFn: (key: string) => dxApi.activateLicense(key),
@@ -225,62 +275,75 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* MediaMTX Settings */}
-        <Card className="lg:col-span-2">
+        {/* MX Settings */}
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Radio className="h-5 w-5" />
-              MediaMTX Settings
+              MX
             </CardTitle>
           </CardHeader>
           <CardContent>
             {mediamtxLoading ? (
               <div className="animate-pulse space-y-4">
-                {[...Array(4)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                   <div key={i} className="h-10 rounded bg-muted" />
                 ))}
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+                {/* Host */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Host / IP</label>
+                  <Input
+                    value={mxForm.host}
+                    onChange={(e) =>
+                      setMxForm((prev) => ({ ...prev, host: e.target.value }))
+                    }
+                    placeholder="localhost"
+                  />
+                </div>
+
+                {/* Ports */}
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">API URL</label>
+                    <label className="text-sm font-medium text-muted-foreground">API</label>
                     <Input
-                      value={mediamtxForm.api_url}
+                      value={mxForm.apiPort}
                       onChange={(e) =>
-                        setMediamtxForm((prev) => ({ ...prev, api_url: e.target.value }))
+                        setMxForm((prev) => ({ ...prev, apiPort: e.target.value }))
                       }
-                      placeholder="http://localhost:9997/v3"
+                      placeholder="9997"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">HLS URL</label>
+                    <label className="text-sm font-medium text-muted-foreground">HLS</label>
                     <Input
-                      value={mediamtxForm.hls_url}
+                      value={mxForm.hlsPort}
                       onChange={(e) =>
-                        setMediamtxForm((prev) => ({ ...prev, hls_url: e.target.value }))
+                        setMxForm((prev) => ({ ...prev, hlsPort: e.target.value }))
                       }
-                      placeholder="http://localhost:8888"
+                      placeholder="8888"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">WebRTC URL</label>
+                    <label className="text-sm font-medium text-muted-foreground">WebRTC</label>
                     <Input
-                      value={mediamtxForm.webrtc_url}
+                      value={mxForm.webrtcPort}
                       onChange={(e) =>
-                        setMediamtxForm((prev) => ({ ...prev, webrtc_url: e.target.value }))
+                        setMxForm((prev) => ({ ...prev, webrtcPort: e.target.value }))
                       }
-                      placeholder="http://localhost:8889"
+                      placeholder="8889"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">RTSP URL</label>
+                    <label className="text-sm font-medium text-muted-foreground">RTSP</label>
                     <Input
-                      value={mediamtxForm.rtsp_url}
+                      value={mxForm.rtspPort}
                       onChange={(e) =>
-                        setMediamtxForm((prev) => ({ ...prev, rtsp_url: e.target.value }))
+                        setMxForm((prev) => ({ ...prev, rtspPort: e.target.value }))
                       }
-                      placeholder="rtsp://localhost:8554"
+                      placeholder="8554"
                     />
                   </div>
                 </div>
@@ -290,14 +353,14 @@ export function SettingsPage() {
                   <input
                     type="checkbox"
                     id="mediamtx-enabled"
-                    checked={mediamtxForm.enabled}
+                    checked={mxForm.enabled}
                     onChange={(e) =>
-                      setMediamtxForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                      setMxForm((prev) => ({ ...prev, enabled: e.target.checked }))
                     }
                     className="h-4 w-4 rounded border-gray-300"
                   />
                   <label htmlFor="mediamtx-enabled" className="text-sm">
-                    Enable MediaMTX integration
+                    Enable MX integration
                   </label>
                 </div>
 
@@ -364,17 +427,15 @@ export function SettingsPage() {
               System Actions
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4">
               <Button
                 variant="outline"
-                onClick={() => restartMutation.mutate()}
-                disabled={restartMutation.isPending}
+                onClick={handleRestart}
+                disabled={isRestarting}
               >
                 <RefreshCw
-                  className={`mr-2 h-4 w-4 ${
-                    restartMutation.isPending ? 'animate-spin' : ''
-                  }`}
+                  className={cn('mr-2 h-4 w-4', isRestarting && 'animate-spin')}
                 />
                 Restart System
               </Button>
@@ -383,6 +444,36 @@ export function SettingsPage() {
                 Factory Reset
               </Button>
             </div>
+
+            {/* Restart Progress */}
+            {restartSteps.length > 0 && (
+              <div className="rounded-lg border p-4 space-y-3">
+                <p className="text-sm font-medium">System Restart Progress</p>
+                {restartSteps.map((step) => (
+                  <div key={step.step} className="flex items-center gap-3">
+                    {step.status === 'loading' && (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    )}
+                    {step.status === 'success' && (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    )}
+                    {step.status === 'error' && (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span
+                      className={cn(
+                        'text-sm',
+                        step.status === 'loading' && 'text-blue-600',
+                        step.status === 'success' && 'text-green-600',
+                        step.status === 'error' && 'text-red-600'
+                      )}
+                    >
+                      {step.message}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

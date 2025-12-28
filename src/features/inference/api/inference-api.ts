@@ -1,6 +1,6 @@
 import { api, apiClient } from '@shared/api/client'
 import { API_CONFIG } from '@shared/config/api'
-import type { Inference, InferenceSettings, StreamResponse } from '@shared/types'
+import type { Inference, InferenceSettings, StreamResponse, InferenceStatusResponse } from '@shared/types'
 
 const { endpoints } = API_CONFIG
 
@@ -67,4 +67,13 @@ export const inferenceApi = {
   // Stop stream
   stopStream: (sessionId: string) =>
     api.delete<void>(`${endpoints.inferenceStream}?sessionId=${sessionId}`),
+
+  // Get all inference statuses (backend returns int status codes)
+  getAllStatus: () => api.get<InferenceStatusResponse[]>(endpoints.inferenceStatus),
+
+  // Get specific inference status
+  getStatus: (appId: string, videoId: string) =>
+    api.get<InferenceStatusResponse>(
+      `${endpoints.inferenceStatus}?appId=${appId}&videoId=${videoId}`
+    ),
 }

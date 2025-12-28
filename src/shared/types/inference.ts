@@ -63,6 +63,36 @@ export interface StreamResponse {
   session_id: string
 }
 
+// Inference status from GET /api/v2/inference/status
+// Backend returns: NG=0, READY=1, CONNECTING=2, CONNECTED=3
+export type InferenceStatusCode = 0 | 1 | 2 | 3
+export type InferenceStatusType = 'running' | 'stopped' | 'error'
+
+export interface InferenceStatusResponse {
+  appId: string
+  videoId: string
+  status: InferenceStatusCode // Backend returns int: 0=NG, 1=READY, 2=CONNECTING, 3=CONNECTED
+  count: number
+  eos: boolean
+  err: boolean
+}
+
+// Helper to convert backend status code to frontend status type
+export function getInferenceStatusType(response: InferenceStatusResponse): InferenceStatusType {
+  if (response.err) return 'error'
+  if (response.status === 3) return 'running' // CONNECTED
+  return 'stopped' // NG, READY, CONNECTING
+}
+
+export interface InferenceStatus {
+  appId: string
+  videoId: string
+  status: InferenceStatusType
+  session_id?: string
+  started_at?: string
+  error?: string
+}
+
 // Rappid graph node types
 export enum ShapeType {
   BASE = 'app.Base',

@@ -25,10 +25,10 @@ export function CameraGrid({
     .filter((c): c is Camera => c !== undefined)
 
   // Determine grid layout based on camera count
+  // 1-2 cameras: vertical stack (1 column) for better 16:9 utilization
+  // 3+ cameras: grid layout
   const getGridClass = (count: number) => {
-    if (count === 0) return 'grid-cols-1'
-    if (count === 1) return 'grid-cols-1'
-    if (count === 2) return 'grid-cols-2'
+    if (count <= 2) return 'grid-cols-1'
     if (count <= 4) return 'grid-cols-2'
     if (count <= 6) return 'grid-cols-3'
     return 'grid-cols-4'
@@ -50,12 +50,12 @@ export function CameraGrid({
     const maximizedCamera = selectedCameras.find((c) => c.id === maximizedId)
     if (maximizedCamera) {
       return (
-        <div className={cn('h-full p-2 bg-gray-900', className)}>
+        <div className={cn('h-full p-2 bg-gray-900 flex items-center justify-center', className)}>
           <CameraView
             camera={maximizedCamera}
             onRemove={handleRemove}
             onMaximize={handleMaximize}
-            className="h-full"
+            className="aspect-video max-h-full max-w-full"
           />
         </div>
       )
@@ -75,7 +75,7 @@ export function CameraGrid({
         // Camera grid
         <div
           className={cn(
-            'grid gap-2 h-full',
+            'grid gap-2 h-full place-content-center',
             getGridClass(selectedCameras.length)
           )}
         >
@@ -85,10 +85,7 @@ export function CameraGrid({
               camera={camera}
               onRemove={handleRemove}
               onMaximize={handleMaximize}
-              className={cn(
-                'aspect-video',
-                selectedCameras.length === 1 && 'aspect-auto h-full'
-              )}
+              className="aspect-video"
             />
           ))}
         </div>

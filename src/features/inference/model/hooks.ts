@@ -9,6 +9,7 @@ const QUERY_KEYS = {
   inferencesByVideo: (videoId: string) => ['inferences', videoId] as const,
   preview: (appId: string, videoId: string) =>
     ['inference-preview', appId, videoId] as const,
+  statuses: ['inference-statuses'] as const,
 }
 
 // Query hooks
@@ -142,6 +143,16 @@ export function useStartStream() {
 export function useStopStream() {
   return useMutation({
     mutationFn: (sessionId: string) => inferenceApi.stopStream(sessionId),
+  })
+}
+
+// Inference status hook
+export function useInferenceStatuses() {
+  return useQuery({
+    queryKey: QUERY_KEYS.statuses,
+    queryFn: inferenceApi.getAllStatus,
+    refetchInterval: 5000, // Poll every 5 seconds
+    staleTime: 3000,
   })
 }
 
