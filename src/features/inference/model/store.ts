@@ -1,16 +1,12 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type {
-  Inference,
-  PreviewImage,
-  GraphData,
-} from '@shared/types'
+import type { Inference, GraphData } from '@shared/types'
 
 interface InferenceState {
   // Data
   inferences: Inference[]
   currentInference: Inference | null
-  previewImage: PreviewImage | null
+  previewImageUrl: string | null  // Blob URL for binary JPEG
   graphData: GraphData | null
 
   // UI State
@@ -21,7 +17,7 @@ interface InferenceState {
   // Actions
   setInferences: (inferences: Inference[]) => void
   setCurrentInference: (inference: Inference | null) => void
-  setPreviewImage: (image: PreviewImage | null) => void
+  setPreviewImageUrl: (url: string | null) => void
   setGraphData: (data: GraphData | null) => void
   setLoading: (loading: boolean) => void
   setLoadingPreview: (loading: boolean) => void
@@ -32,7 +28,7 @@ interface InferenceState {
 const initialState = {
   inferences: [],
   currentInference: null,
-  previewImage: null,
+  previewImageUrl: null,
   graphData: null,
   isLoading: false,
   isLoadingPreview: false,
@@ -41,18 +37,32 @@ const initialState = {
 
 export const useInferenceStore = create<InferenceState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
 
       setInferences: (inferences) => set({ inferences }),
       setCurrentInference: (inference) =>
         set({ currentInference: inference }),
-      setPreviewImage: (image) => set({ previewImage: image }),
+      setPreviewImageUrl: (url) => {
+        // Revoke old blob URL to prevent memory leaks
+        const oldUrl = get().previewImageUrl
+        if (oldUrl) {
+          URL.revokeObjectURL(oldUrl)
+        }
+        set({ previewImageUrl: url })
+      },
       setGraphData: (data) => set({ graphData: data }),
       setLoading: (loading) => set({ isLoading: loading }),
       setLoadingPreview: (loading) => set({ isLoadingPreview: loading }),
       setError: (error) => set({ error }),
-      reset: () => set(initialState),
+      reset: () => {
+        // Revoke blob URL on reset
+        const oldUrl = get().previewImageUrl
+        if (oldUrl) {
+          URL.revokeObjectURL(oldUrl)
+        }
+        set(initialState)
+      },
     }),
     { name: 'inference-store' }
   )
@@ -62,7 +72,7 @@ export const useInferenceStore = create<InferenceState>()(
 export const selectInferences = (state: InferenceState) => state.inferences
 export const selectCurrentInference = (state: InferenceState) =>
   state.currentInference
-export const selectPreviewImage = (state: InferenceState) => state.previewImage
+export const selectPreviewImageUrl = (state: InferenceState) => state.previewImageUrl
 export const selectGraphData = (state: InferenceState) => state.graphData
 export const selectIsLoading = (state: InferenceState) => state.isLoading
 export const selectError = (state: InferenceState) => state.error

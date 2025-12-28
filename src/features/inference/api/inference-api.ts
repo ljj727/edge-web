@@ -1,8 +1,16 @@
-import { api } from '@shared/api/client'
+import { api, apiClient } from '@shared/api/client'
 import { API_CONFIG } from '@shared/config/api'
-import type { Inference, InferenceSettings, PreviewImage } from '@shared/types'
+import type { Inference, InferenceSettings, StreamResponse } from '@shared/types'
 
 const { endpoints } = API_CONFIG
+
+export interface CreateInferenceRequest {
+  appId: string
+  videoId: string
+  uri: string
+  name: string
+  settings: InferenceSettings
+}
 
 export const inferenceApi = {
   // Get all inferences for a video
@@ -12,9 +20,9 @@ export const inferenceApi = {
   // Get all inferences
   getAll: () => api.get<Inference[]>(endpoints.inference),
 
-  // Create new inference
-  create: (videoId: string, data: Partial<Inference>) =>
-    api.post<Inference>(`${endpoints.inference}?videoId=${videoId}`, data),
+  // Create new inference (also starts it)
+  create: (data: CreateInferenceRequest) =>
+    api.post<Inference>(endpoints.inference, data),
 
   // Update inference
   update: (appId: string, videoId: string, data: Partial<Inference>) =>
@@ -23,7 +31,7 @@ export const inferenceApi = {
       data
     ),
 
-  // Delete inference
+  // Delete inference (also stops it)
   delete: (appId: string, videoId: string) =>
     api.delete<void>(
       `${endpoints.inference}?appId=${appId}&videoId=${videoId}`
@@ -33,35 +41,30 @@ export const inferenceApi = {
   updateEventSettings: (
     appId: string,
     videoId: string,
-    settings: InferenceSettings,
-    nodeSettings: string
+    settings: InferenceSettings
   ) =>
     api.put<void>(
       `${endpoints.inferenceEventSetting}?appId=${appId}&videoId=${videoId}`,
-      { settings, nodeSettings }
+      { settings }
     ),
 
-  // Get preview image
-  getPreview: (appId: string, videoId: string) =>
-    api.get<PreviewImage>(
-      `${endpoints.inferencePreview}?appId=${appId}&videoId=${videoId}`
+  // Get preview image - returns binary JPEG blob
+  getPreview: async (appId: string, videoId: string): Promise<string> => {
+    const response = await apiClient.get(
+      `${endpoints.inferencePreview}?appId=${appId}&videoId=${videoId}`,
+      { responseType: 'blob' }
+    )
+    // Create blob URL from binary response
+    return URL.createObjectURL(response.data)
+  },
+
+  // Start stream - returns HLS location
+  startStream: (appId: string, videoId: string, uri: string) =>
+    api.post<StreamResponse>(
+      `${endpoints.inferenceStream}?appId=${appId}&videoId=${videoId}&uri=${encodeURIComponent(uri)}`
     ),
 
-  // Start inference
-  start: (appId: string, videoId: string) =>
-    api.post<void>(
-      `${endpoints.inference}/start?appId=${appId}&videoId=${videoId}`
-    ),
-
-  // Stop inference
-  stop: (appId: string, videoId: string) =>
-    api.post<void>(
-      `${endpoints.inference}/stop?appId=${appId}&videoId=${videoId}`
-    ),
-
-  // Get HLS stream with WebSocket port
-  getHlsConfig: (uri: string, appId: string, videoId: string) =>
-    api.get<{ wsPort: number }>(
-      `${endpoints.inference}/hls?uri=${uri}&appId=${appId}&videoId=${videoId}`
-    ),
+  // Stop stream
+  stopStream: (sessionId: string) =>
+    api.delete<void>(`${endpoints.inferenceStream}?sessionId=${sessionId}`),
 }

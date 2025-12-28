@@ -53,11 +53,14 @@ export interface Analytics {
   description?: string
 }
 
-export interface PreviewImage {
-  appId: string
-  videoId: string
-  imageData: string // base64
-  timestamp: number
+// Preview is now binary JPEG - no JSON wrapper
+// Use blob URL directly
+
+// Stream response from POST /api/v2/inference/stream
+export interface StreamResponse {
+  location: string
+  ts_start: number
+  session_id: string
 }
 
 // Rappid graph node types
