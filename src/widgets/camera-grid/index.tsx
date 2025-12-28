@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Video, Plus } from 'lucide-react'
+import { Video } from 'lucide-react'
 import { CameraView } from '@widgets/camera-view'
 import { cn } from '@shared/lib/cn'
 import type { Camera } from '@shared/types'
@@ -8,7 +8,6 @@ interface CameraGridProps {
   cameras: Camera[]
   selectedCameraIds: string[]
   onRemoveCamera?: (id: string) => void
-  onAddCamera?: () => void
   className?: string
 }
 
@@ -16,7 +15,6 @@ export function CameraGrid({
   cameras,
   selectedCameraIds,
   onRemoveCamera,
-  onAddCamera,
   className,
 }: CameraGridProps) {
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
@@ -71,18 +69,7 @@ export function CameraGrid({
         <div className="h-full flex flex-col items-center justify-center text-gray-500">
           <Video className="w-16 h-16 mb-4" />
           <p className="text-lg font-medium mb-2">No Cameras Selected</p>
-          <p className="text-sm mb-4">
-            Select cameras from the list or add a new camera
-          </p>
-          {onAddCamera && (
-            <button
-              onClick={onAddCamera}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Camera
-            </button>
-          )}
+          <p className="text-sm">Select cameras from the left panel</p>
         </div>
       ) : (
         // Camera grid
@@ -104,17 +91,6 @@ export function CameraGrid({
               )}
             />
           ))}
-
-          {/* Add camera placeholder (if less than 4 cameras) */}
-          {selectedCameras.length < 4 && onAddCamera && (
-            <button
-              onClick={onAddCamera}
-              className="aspect-video flex flex-col items-center justify-center bg-gray-800 rounded-lg border-2 border-dashed border-gray-700 hover:border-gray-600 hover:bg-gray-700/50 transition-colors"
-            >
-              <Plus className="w-8 h-8 text-gray-500 mb-2" />
-              <span className="text-gray-500 text-sm">Add Camera</span>
-            </button>
-          )}
         </div>
       )}
     </div>
