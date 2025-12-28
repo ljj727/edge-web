@@ -62,7 +62,6 @@ export function InferenceSettingDialog({
           version: inference.settings.version,
           configs: eventSettings,
         },
-        nodeSettings: JSON.stringify(graphData),
       })
 
       setHasChanges(false)
