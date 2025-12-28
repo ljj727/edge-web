@@ -1,20 +1,50 @@
+import { useState } from 'react'
 import { Button } from '@shared/ui'
-import { Plus, Video, Camera, Check, Trash2, RefreshCw } from 'lucide-react'
-import { useCameras, useCreateCamera, useDeleteCamera, useCameraStore } from '@features/camera'
+import { Plus, Video, Camera, Check, Trash2, RefreshCw, PanelRightClose, PanelRightOpen, CloudDownload } from 'lucide-react'
+import { useCameras, useCreateCamera, useDeleteCamera, useSyncCameras, useCameraStore } from '@features/camera'
+import { useInferencesByVideo, useCreateInference, useDeleteInference } from '@features/inference'
 import { CameraGrid } from '@widgets/camera-grid'
 import { CameraForm } from '@widgets/camera-form'
+import { VisionAppPanel, type VisionApp } from '@widgets/vision-app-panel'
+import { AssignVisionAppDialog } from '@widgets/vision-app-dialog'
+import { EventSettingsDialog } from '@widgets/event-settings-dialog'
 import { cn } from '@shared/lib/cn'
-import type { CameraCreate } from '@shared/types'
+import type { CameraCreate, Camera as CameraType, App } from '@shared/types'
 
 export function VideoStreamPage() {
   const { data: cameras, isLoading, refetch } = useCameras()
   const createCamera = useCreateCamera()
   const deleteCamera = useDeleteCamera()
+  const syncCameras = useSyncCameras()
 
   const selectedCameraIds = useCameraStore((state) => state.selectedCameraIds)
   const toggleCameraSelection = useCameraStore((state) => state.toggleCameraSelection)
   const isFormOpen = useCameraStore((state) => state.isFormOpen)
   const setFormOpen = useCameraStore((state) => state.setFormOpen)
+
+  // Vision App panel state
+  const [isPanelOpen, setIsPanelOpen] = useState(true)
+  const [focusedCameraId, setFocusedCameraId] = useState<string | null>(null)
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
+
+  // Inference hooks
+  const { data: inferences } = useInferencesByVideo(focusedCameraId || '')
+  const createInference = useCreateInference()
+  const deleteInference = useDeleteInference()
+
+  // Convert inferences to VisionApp format for display
+  const assignedApps: VisionApp[] = (inferences || []).map((inf) => ({
+    id: inf.appId,
+    name: inf.name || inf.appId,
+    version: '',
+    status: 'connected' as const,
+  }))
+
+  // Event settings state
+  const [isEventSettingsOpen, setIsEventSettingsOpen] = useState(false)
+  const [selectedAppForEvents, setSelectedAppForEvents] = useState<VisionApp | null>(null)
+
+  const focusedCamera = cameras?.find((c) => c.id === focusedCameraId) || null
 
   const handleAddCamera = async (data: CameraCreate) => {
     await createCamera.mutateAsync(data)
@@ -30,10 +60,56 @@ export function VideoStreamPage() {
     toggleCameraSelection(id)
   }
 
+  const handleCameraClick = (camera: CameraType) => {
+    toggleCameraSelection(camera.id)
+    setFocusedCameraId(camera.id)
+  }
+
+  const handleAssignApp = async (app: App) => {
+    if (!focusedCameraId || !focusedCamera) return
+
+    try {
+      await createInference.mutateAsync({
+        appId: app.id,
+        videoId: focusedCameraId,
+        uri: focusedCamera.rtsp_url,
+        name: `${app.name} - ${focusedCamera.name}`,
+        settings: {
+          version: '1.0',
+          configs: [],
+        },
+      })
+      // React Query automatically invalidates via onSuccess hook
+    } catch (error) {
+      console.error('Failed to create inference:', error)
+    }
+  }
+
+  const handleRemoveApp = async (appId: string) => {
+    if (!focusedCameraId) return
+
+    try {
+      await deleteInference.mutateAsync({ appId, videoId: focusedCameraId })
+      // React Query automatically invalidates via onSuccess hook
+    } catch (error) {
+      console.error('Failed to delete inference:', error)
+    }
+  }
+
+  const handleConfigureEvents = (appId: string) => {
+    if (!focusedCameraId) return
+    const app = assignedApps.find((a) => a.id === appId)
+    if (app) {
+      setSelectedAppForEvents(app)
+      setIsEventSettingsOpen(true)
+    }
+  }
+
+
   return (
     <div className="flex h-full">
       {/* Left Panel - Camera List */}
-      <div className="w-80 border-r flex flex-col">
+      <div className="w-72 border-r flex flex-col shrink-0">
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -41,6 +117,15 @@ export function VideoStreamPage() {
               Cameras
             </h2>
             <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => syncCameras.mutate()}
+                disabled={syncCameras.isPending}
+                title="Sync from MediaMTX"
+              >
+                <CloudDownload className={`h-4 w-4 ${syncCameras.isPending ? 'animate-pulse' : ''}`} />
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -59,7 +144,7 @@ export function VideoStreamPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Select up to 4 cameras to display in the grid
+            Select cameras to display and manage Vision Apps
           </p>
         </div>
 
@@ -78,16 +163,21 @@ export function VideoStreamPage() {
             <div className="space-y-2">
               {cameras.map((camera) => {
                 const isSelected = selectedCameraIds.includes(camera.id)
+                const isFocused = focusedCameraId === camera.id
+                // Show app count only for focused camera
+                const appCount = isFocused ? assignedApps.length : 0
                 return (
                   <div
                     key={camera.id}
                     className={cn(
                       'rounded-lg border p-3 cursor-pointer transition-colors',
-                      isSelected
-                        ? 'border-primary bg-primary/5'
+                      isFocused
+                        ? 'border-primary bg-primary/10'
+                        : isSelected
+                        ? 'border-primary/50 bg-primary/5'
                         : 'hover:bg-muted/50'
                     )}
-                    onClick={() => toggleCameraSelection(camera.id)}
+                    onClick={() => handleCameraClick(camera)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -100,6 +190,11 @@ export function VideoStreamPage() {
                         <p className="text-xs text-muted-foreground truncate mt-1">
                           {camera.id}
                         </p>
+                        {appCount > 0 && (
+                          <p className="text-xs text-green-600 mt-1">
+                            {appCount} Vision App{appCount > 1 ? 's' : ''} assigned
+                          </p>
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -142,8 +237,8 @@ export function VideoStreamPage() {
         )}
       </div>
 
-      {/* Right Panel - Camera Grid */}
-      <div className="flex-1 flex flex-col">
+      {/* Middle Panel - Camera Grid */}
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Add Camera Form (Overlay) */}
         {isFormOpen && (
           <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -161,10 +256,69 @@ export function VideoStreamPage() {
           cameras={cameras || []}
           selectedCameraIds={selectedCameraIds}
           onRemoveCamera={handleRemoveFromGrid}
-          onAddCamera={() => setFormOpen(true)}
           className="flex-1"
         />
       </div>
+
+      {/* Right Panel - Vision App Management */}
+      <div
+        className={cn(
+          'border-l flex flex-col transition-all duration-300 shrink-0',
+          isPanelOpen ? 'w-80' : 'w-12'
+        )}
+      >
+        {/* Panel Toggle */}
+        <div className="p-2 border-b flex justify-center">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            title={isPanelOpen ? 'Close Panel' : 'Open Panel'}
+          >
+            {isPanelOpen ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <PanelRightOpen className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+
+        {isPanelOpen && (
+          <VisionAppPanel
+            camera={focusedCamera}
+            assignedApps={assignedApps}
+            onAssignApp={() => setIsAssignDialogOpen(true)}
+            onRemoveApp={handleRemoveApp}
+            onConfigureEvents={handleConfigureEvents}
+            onCameraSettings={() => {
+              // TODO: Implement camera settings
+              console.log('Camera settings')
+              alert('Camera settings not implemented yet')
+            }}
+            className="flex-1"
+          />
+        )}
+      </div>
+
+      {/* Assign Vision App Dialog */}
+      <AssignVisionAppDialog
+        isOpen={isAssignDialogOpen}
+        onClose={() => setIsAssignDialogOpen(false)}
+        onAssign={handleAssignApp}
+        assignedAppIds={assignedApps.map((a) => a.id)}
+      />
+
+      {/* Event Settings Dialog */}
+      <EventSettingsDialog
+        isOpen={isEventSettingsOpen}
+        onClose={() => {
+          setIsEventSettingsOpen(false)
+          setSelectedAppForEvents(null)
+        }}
+        app={selectedAppForEvents}
+        cameraId={focusedCameraId || ''}
+        cameraName={focusedCamera?.name || ''}
+      />
     </div>
   )
 }
