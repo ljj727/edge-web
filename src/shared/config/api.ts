@@ -6,6 +6,8 @@ export const API_CONFIG = {
     inference: '/v2/inference',
     inferenceEventSetting: '/v2/inference/event-setting',
     inferencePreview: '/v2/inference/preview',
+    inferenceStream: '/v2/inference/stream',
+    inferenceStatus: '/v2/inference/status',
 
     // Stream
     stream: '/v2/stream',
