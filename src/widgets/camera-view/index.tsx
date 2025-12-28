@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { X, Maximize2, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
+import { useDetection, DetectionOverlay } from '@features/detection'
 import type { Camera, CameraPlayerStatus } from '@shared/types'
 
 interface CameraViewProps {
@@ -23,6 +24,12 @@ export function CameraView({
   const [status, setStatus] = useState<CameraPlayerStatus>('loading')
   const [isMuted, setIsMuted] = useState(true)
   const [retryCount, setRetryCount] = useState(0)
+
+  // Detection overlay - uses camera.id as stream_id
+  const { getDetectionForTimestamp } = useDetection({
+    streamId: camera.id,
+    enabled: status === 'playing',
+  })
 
   useEffect(() => {
     const video = videoRef.current
@@ -96,6 +103,23 @@ export function CameraView({
         // Create offer
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
+
+        // Wait for ICE gathering to complete
+        await new Promise<void>((resolve) => {
+          if (pc.iceGatheringState === 'complete') {
+            resolve()
+          } else {
+            const checkState = () => {
+              if (pc.iceGatheringState === 'complete') {
+                pc.removeEventListener('icegatheringstatechange', checkState)
+                resolve()
+              }
+            }
+            pc.addEventListener('icegatheringstatechange', checkState)
+            // Timeout after 3 seconds
+            setTimeout(resolve, 3000)
+          }
+        })
 
         // Send WHEP request to MediaMTX
         const response = await fetch(camera.webrtc_url!, {
@@ -235,6 +259,14 @@ export function CameraView({
         playsInline
         className="w-full h-full object-cover"
       />
+
+      {/* Detection overlay */}
+      {status === 'playing' && (
+        <DetectionOverlay
+          videoRef={videoRef}
+          getDetectionForTimestamp={getDetectionForTimestamp}
+        />
+      )}
 
       {/* Loading overlay */}
       {status === 'loading' && (
