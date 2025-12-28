@@ -83,3 +83,14 @@ export function useDeleteCamera() {
     },
   })
 }
+
+export function useSyncCameras() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => cameraApi.sync(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cameras })
+    },
+  })
+}

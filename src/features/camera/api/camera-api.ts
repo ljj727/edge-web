@@ -36,4 +36,10 @@ export const cameraApi = {
     api.post<{ success: boolean; message: string }>(
       `${CAMERAS_ENDPOINT}/${id}/restart`
     ),
+
+  // Sync cameras from MediaMTX
+  sync: () =>
+    api.post<{ success: boolean; message: string; synced: number; skipped: number }>(
+      `${CAMERAS_ENDPOINT}/sync`
+    ),
 }

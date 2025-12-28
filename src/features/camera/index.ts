@@ -9,6 +9,7 @@ export {
   useCreateCamera,
   useUpdateCamera,
   useDeleteCamera,
+  useSyncCameras,
 } from './model/hooks'
 
 // API
