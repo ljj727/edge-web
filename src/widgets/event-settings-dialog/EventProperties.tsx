@@ -88,8 +88,8 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
           </Field>
         </Section>
 
-        {/* Target - for ROI, Line, EnEx */}
-        {['ROI', 'Line', 'EnEx'].includes(event.eventType) && (
+        {/* Target - for RoI, Line, Enter-Exit */}
+        {['RoI', 'Line', 'Enter-Exit'].includes(event.eventType) && (
           <Section title="Target Labels">
             <div className="flex flex-wrap gap-1 mb-2">
               {(event.target?.labels || []).map((label) => (
@@ -166,7 +166,7 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
         )}
 
         {/* Timeout */}
-        {['ROI', 'And'].includes(event.eventType) && (
+        {['RoI', 'And'].includes(event.eventType) && (
           <Section title="Timeout (seconds)">
             <input
               type="number"
@@ -207,7 +207,7 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
         )}
 
         {/* Heatmap settings */}
-        {event.eventType === 'HM' && (
+        {event.eventType === 'Heatmap' && (
           <Section title="Heatmap Settings">
             <Field label="Regeneration Interval (seconds)">
               <input

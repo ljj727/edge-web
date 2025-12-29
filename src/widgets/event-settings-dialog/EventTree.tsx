@@ -205,7 +205,7 @@ interface AddEventMenuProps {
 }
 
 function AddEventMenu({ onSelect, onClose, depth }: AddEventMenuProps) {
-  const eventTypes: EventType[] = ['ROI', 'Line', 'And', 'Or', 'Speed', 'HM', 'Filter', 'EnEx', 'Alarm']
+  const eventTypes: EventType[] = ['RoI', 'Line', 'And', 'Or', 'Speed', 'Heatmap', 'Filter', 'Enter-Exit', 'Alarm']
 
   return (
     <div

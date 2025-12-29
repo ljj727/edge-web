@@ -1,14 +1,15 @@
 // Event types for inference pipeline
+// Must match compositor expected types (case sensitive!)
 export type EventType =
-  | 'ROI'
-  | 'Line'
-  | 'And'
-  | 'Or'
-  | 'Speed'
-  | 'HM'
-  | 'Filter'
-  | 'EnEx'
-  | 'Alarm'
+  | 'RoI'        // Region of Interest (zone)
+  | 'Line'       // Line crossing
+  | 'And'        // Logical AND
+  | 'Or'         // Logical OR
+  | 'Speed'      // Speed detection
+  | 'Heatmap'    // Heatmap generation
+  | 'Filter'     // Count/timeout filter
+  | 'Enter-Exit' // Enter-exit tracking
+  | 'Alarm'      // Alarm trigger
 
 export type DirectionType = 'A2B' | 'B2A' | 'BOTH'
 

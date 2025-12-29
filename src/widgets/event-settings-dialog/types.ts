@@ -47,17 +47,17 @@ export function generateEventId(): string {
   return `ev-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 }
 
-// Event type display info
+// Event type display info (must match EventType union)
 export const EVENT_TYPE_INFO: Record<EventType, { label: string; color: string; icon: string }> = {
-  ROI: { label: 'ROI Zone', color: '#22c55e', icon: '🔲' },
-  Line: { label: 'Line', color: '#3b82f6', icon: '📏' },
-  And: { label: 'AND', color: '#a855f7', icon: '⊓' },
-  Or: { label: 'OR', color: '#f97316', icon: '⊔' },
-  Speed: { label: 'Speed', color: '#eab308', icon: '⚡' },
-  HM: { label: 'Heatmap', color: '#ec4899', icon: '🔥' },
-  Filter: { label: 'Filter', color: '#6366f1', icon: '🔍' },
-  EnEx: { label: 'Enter/Exit', color: '#14b8a6', icon: '🚪' },
-  Alarm: { label: 'Alarm', color: '#ef4444', icon: '🔔' },
+  'RoI': { label: 'ROI Zone', color: '#22c55e', icon: '🔲' },
+  'Line': { label: 'Line', color: '#3b82f6', icon: '📏' },
+  'And': { label: 'AND', color: '#a855f7', icon: '⊓' },
+  'Or': { label: 'OR', color: '#f97316', icon: '⊔' },
+  'Speed': { label: 'Speed', color: '#eab308', icon: '⚡' },
+  'Heatmap': { label: 'Heatmap', color: '#ec4899', icon: '🔥' },
+  'Filter': { label: 'Filter', color: '#6366f1', icon: '🔍' },
+  'Enter-Exit': { label: 'Enter/Exit', color: '#14b8a6', icon: '🚪' },
+  'Alarm': { label: 'Alarm', color: '#ef4444', icon: '🔔' },
 }
 
 // Detection point options
@@ -91,7 +91,7 @@ export function getDefaultEventSetting(eventType: EventType, name?: string): Eve
   }
 
   switch (eventType) {
-    case 'ROI':
+    case 'RoI':
       return {
         ...base,
         points: [[0.2, 0.2], [0.8, 0.2], [0.8, 0.8], [0.2, 0.8]],
@@ -119,7 +119,7 @@ export function getDefaultEventSetting(eventType: EventType, name?: string): Eve
       }
     case 'Speed':
       return base
-    case 'HM':
+    case 'Heatmap':
       return {
         ...base,
         regenInterval: 60,
@@ -129,7 +129,7 @@ export function getDefaultEventSetting(eventType: EventType, name?: string): Eve
         ...base,
         points: [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
       }
-    case 'EnEx':
+    case 'Enter-Exit':
       return {
         ...base,
         target: { labels: [] },
@@ -146,7 +146,7 @@ export function getDefaultEventSetting(eventType: EventType, name?: string): Eve
 
 // Check if event type requires geometry (points)
 export function requiresGeometry(eventType: EventType): boolean {
-  return ['ROI', 'Line', 'Filter'].includes(eventType)
+  return ['RoI', 'Line', 'Filter'].includes(eventType)
 }
 
 // Check if event type is a container (can have children)

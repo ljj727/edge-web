@@ -138,11 +138,11 @@ export function EventSettingsDialog({
   // Get selected node
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
 
-  // Map flow node type to API event type
+  // Map flow node type to API event type (for preview geometry)
   const nodeTypeToEventType = (nodeType: FlowNodeType): EventType | null => {
     const mapping: Record<FlowNodeType, EventType | null> = {
       object: null, // Object doesn't have geometry
-      zone: 'ROI',
+      zone: 'RoI',  // Case sensitive!
       line: 'Line',
       event: null,
       count: null,
@@ -166,7 +166,7 @@ export function EventSettingsDialog({
         return {
           eventSettingId: n.id,
           eventSettingName: data.label,
-          eventType: nodeTypeToEventType(data.nodeType) || 'ROI',
+          eventType: nodeTypeToEventType(data.nodeType) || 'RoI',
           points: data.points,
           direction: data.direction,
         } as EventSetting
@@ -379,19 +379,20 @@ export function EventSettingsDialog({
 }
 
 // Helper function to map node type to API event type
+// Valid compositor types: RoI, Line, And, Or, Speed, Heatmap, Filter, Enter-Exit, Alarm
 function mapNodeTypeToEventType(nodeType: string): string | null {
-  const mapping: Record<string, string> = {
-    object: 'Object',
-    zone: 'ROI',
+  const mapping: Record<string, string | null> = {
+    object: null,      // Object provides target info, not sent as separate config
+    zone: 'RoI',       // Case sensitive!
     line: 'Line',
-    event: 'Event',
-    count: 'Count',
-    timeout: 'Timeout',
+    event: null,       // Internal processing node
+    count: 'Filter',   // Count condition maps to Filter
+    timeout: 'Filter', // Timeout condition maps to Filter
     speed: 'Speed',
-    merge: 'Merge',
+    merge: 'And',      // Merge maps to logical And
     alarm: 'Alarm',
   }
-  return mapping[nodeType] || null
+  return mapping[nodeType] ?? null
 }
 
 // Re-export types
