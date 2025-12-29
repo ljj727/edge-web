@@ -76,26 +76,66 @@ export function EventSettingsDialog({
 
   // Convert flow nodes/edges to API format
   const convertToApiFormat = useCallback((): InferenceSettings => {
-    // For now, create basic configs from nodes
+    // Helper to find parent Object node and build target
+    const findParentObjectTarget = (nodeId: string): { label: string; classType: string | null; resultLabel: string[] | null } | undefined => {
+      // Traverse up the graph to find the Object node
+      let currentId: string | undefined = nodeId
+      while (currentId) {
+        const incomingEdge = edges.find((e) => e.target === currentId)
+        if (!incomingEdge) break
+
+        const parentNode = nodes.find((n) => n.id === incomingEdge.source)
+        if (!parentNode) break
+
+        const parentData = parentNode.data as FlowNodeData
+        if (parentData.nodeType === 'object') {
+          // Found Object node - build target from its classes
+          if (parentData.classes && parentData.classes.length > 0) {
+            return {
+              label: parentData.classes[0],
+              classType: parentData.classifiers && parentData.classifiers.length > 0 ? 'classifier' : null,
+              resultLabel: parentData.classifiers && parentData.classifiers.length > 0 ? parentData.classifiers : null,
+            }
+          }
+          return undefined
+        }
+        currentId = incomingEdge.source
+      }
+      return undefined
+    }
+
+    // Build configs from nodes
     const configs = nodes.map((node) => {
       const data = node.data as FlowNodeData
+      const eventType = mapNodeTypeToEventType(data.nodeType)
+
+      // Skip nodes without valid event types
+      if (!eventType) return null
 
       // Find parent node (source of incoming edge)
+      // Skip parentId if parent is filtered out (e.g., Object node)
       const incomingEdge = edges.find((e) => e.target === node.id)
-      const parentId = incomingEdge?.source
-
-      // Build target for Object nodes (legacy format: label, classType, resultLabel)
-      let target: { label: string; classType: string | null; resultLabel: string[] | null } | undefined
-      if (data.nodeType === 'object' && data.classes && data.classes.length > 0) {
-        target = {
-          label: data.classes[0], // First selected class
-          classType: data.classifiers && data.classifiers.length > 0 ? 'classifier' : null,
-          resultLabel: data.classifiers && data.classifiers.length > 0 ? data.classifiers : null,
+      let parentId: string | undefined
+      if (incomingEdge) {
+        const parentNode = nodes.find((n) => n.id === incomingEdge.source)
+        if (parentNode) {
+          const parentData = parentNode.data as FlowNodeData
+          const parentEventType = mapNodeTypeToEventType(parentData.nodeType)
+          // Only include parentId if parent node will be in the final configs
+          if (parentEventType) {
+            parentId = incomingEdge.source
+          }
         }
       }
 
+      // For Zone/Line nodes, get target from parent Object node
+      let target: { label: string; classType: string | null; resultLabel: string[] | null } | undefined
+      if (['zone', 'line'].includes(data.nodeType)) {
+        target = findParentObjectTarget(node.id)
+      }
+
       return {
-        eventType: mapNodeTypeToEventType(data.nodeType),
+        eventType,
         eventSettingId: node.id,
         eventSettingName: data.label,
         parentId,
@@ -110,7 +150,7 @@ export function EventSettingsDialog({
 
     return {
       version: SETTINGS_VERSION,
-      configs: configs.filter((c) => c.eventType) as any,
+      configs: configs.filter((c) => c !== null) as any,
     }
   }, [nodes, edges])
 
