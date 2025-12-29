@@ -130,7 +130,8 @@ interface FlowTemplatesModalProps {
 }
 
 function generateId() {
-  return `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  // Generate UUID format required by NATS compositor
+  return crypto.randomUUID()
 }
 
 export function FlowTemplatesModal({ isOpen, onClose, onSelectTemplate }: FlowTemplatesModalProps) {

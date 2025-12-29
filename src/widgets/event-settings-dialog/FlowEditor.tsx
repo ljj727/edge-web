@@ -110,7 +110,8 @@ const proOptions: ProOptions = {
 }
 
 function getNodeId() {
-  return `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  // Generate UUID format required by NATS compositor
+  return crypto.randomUUID()
 }
 
 function FlowEditorInner({
