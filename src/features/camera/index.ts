@@ -1,5 +1,6 @@
 // Store
-export { useCameraStore } from './model/store'
+export { useCameraStore, defaultDisplaySettings } from './model/store'
+export type { CameraDisplaySettings } from './model/store'
 
 // Hooks
 export {

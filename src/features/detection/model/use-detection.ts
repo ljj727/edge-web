@@ -5,12 +5,12 @@ import type { DetectionObject, DetectionResult } from '@shared/types'
 
 const NATS_URL = 'ws://aict.snuailab.ai:20416'
 
-// Buffer retention time in ms
-const BUFFER_RETENTION_MS = 5000
+// How long to keep app detections before considering them stale (ms)
+const APP_STALE_TIMEOUT_MS = 500
 
-interface BufferedDetection {
-  timestamp: number // nanoseconds
+interface AppDetection {
   objects: DetectionObject[]
+  lastUpdate: number // Date.now() in ms
 }
 
 interface UseDetectionOptions {
@@ -26,51 +26,30 @@ export function useDetection({ streamId, enabled = true }: UseDetectionOptions) 
   const subRef = useRef<Subscription | null>(null)
   const scRef = useRef(StringCodec())
 
-  // Detection buffer for timestamp-based sync
-  const bufferRef = useRef<BufferedDetection[]>([])
-  const latestObjectsRef = useRef<DetectionObject[]>([])
+  // Store detections per app_id for multi-app support
+  const appDetectionsRef = useRef<Map<string, AppDetection>>(new Map())
 
-  // Clean old detections from buffer
-  const cleanBuffer = useCallback(() => {
-    const now = Date.now() * 1e6 // Convert to nanoseconds
-    const cutoff = now - BUFFER_RETENTION_MS * 1e6
-    bufferRef.current = bufferRef.current.filter(d => d.timestamp > cutoff)
-  }, [])
+  // Get merged detections from all active apps
+  const getLatestDetection = useCallback((): DetectionObject[] => {
+    const now = Date.now()
+    const allObjects: DetectionObject[] = []
 
-  // Find closest detection for given timestamp (in nanoseconds)
-  const getDetectionForTimestamp = useCallback((timestampNs: number): DetectionObject[] => {
-    const buffer = bufferRef.current
-    if (buffer.length === 0) return []
-
-    // Find closest detection
-    let closest = buffer[0]
-    let minDiff = Math.abs(buffer[0].timestamp - timestampNs)
-
-    for (const detection of buffer) {
-      const diff = Math.abs(detection.timestamp - timestampNs)
-      if (diff < minDiff) {
-        minDiff = diff
-        closest = detection
+    // Merge all non-stale app detections
+    for (const [appId, detection] of appDetectionsRef.current) {
+      if (now - detection.lastUpdate < APP_STALE_TIMEOUT_MS) {
+        allObjects.push(...detection.objects)
+      } else {
+        // Clean up stale app data
+        appDetectionsRef.current.delete(appId)
       }
     }
 
-    // Only return if within reasonable time window (100ms = 100_000_000 ns)
-    if (minDiff < 100_000_000) {
-      return closest.objects
-    }
-
-    return []
-  }, [])
-
-  // Get latest detection (for fallback)
-  const getLatestDetection = useCallback((): DetectionObject[] => {
-    return latestObjectsRef.current
+    return allObjects
   }, [])
 
   useEffect(() => {
     if (!enabled || !streamId) {
-      bufferRef.current = []
-      latestObjectsRef.current = []
+      appDetectionsRef.current.clear()
       return
     }
 
@@ -98,19 +77,11 @@ export function useDetection({ streamId, enabled = true }: UseDetectionOptions) 
             try {
               const data: DetectionResult = JSON.parse(scRef.current.decode(msg.data))
 
-              // Add to buffer with timestamp
-              bufferRef.current.push({
-                timestamp: data.metadata.timestamp,
+              // Store detection by app_id for multi-app merging
+              appDetectionsRef.current.set(data.metadata.app_id, {
                 objects: data.objects,
+                lastUpdate: Date.now(),
               })
-
-              // Update latest
-              latestObjectsRef.current = data.objects
-
-              // Clean old entries periodically
-              if (bufferRef.current.length > 100) {
-                cleanBuffer()
-              }
             } catch (e) {
               console.error('Failed to parse detection message:', e)
             }
@@ -138,15 +109,13 @@ export function useDetection({ streamId, enabled = true }: UseDetectionOptions) 
         ncRef.current = null
       }
       setIsConnected(false)
-      bufferRef.current = []
-      latestObjectsRef.current = []
+      appDetectionsRef.current.clear()
     }
-  }, [streamId, enabled, cleanBuffer])
+  }, [streamId, enabled])
 
   return {
     isConnected,
     error,
-    getDetectionForTimestamp,
     getLatestDetection,
   }
 }

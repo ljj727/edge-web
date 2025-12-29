@@ -1,13 +1,16 @@
 import { useRef, useEffect, useState } from 'react'
-import { X, Maximize2, Volume2, VolumeX } from 'lucide-react'
+import { X, Maximize2, Volume2, VolumeX, Settings } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
 import { useDetection, DetectionOverlay } from '@features/detection'
+import type { CameraDisplaySettings } from '@features/camera'
 import type { Camera, CameraPlayerStatus } from '@shared/types'
 
 interface CameraViewProps {
   camera: Camera
   onRemove?: (id: string) => void
   onMaximize?: (id: string) => void
+  onSettings?: (id: string) => void
+  displaySettings?: CameraDisplaySettings
   className?: string
   showControls?: boolean
 }
@@ -16,6 +19,8 @@ export function CameraView({
   camera,
   onRemove,
   onMaximize,
+  onSettings,
+  displaySettings,
   className,
   showControls = true,
 }: CameraViewProps) {
@@ -26,7 +31,7 @@ export function CameraView({
   const [retryCount, setRetryCount] = useState(0)
 
   // Detection overlay - uses camera.id as stream_id
-  const { getDetectionForTimestamp } = useDetection({
+  const { getLatestDetection } = useDetection({
     streamId: camera.id,
     enabled: status === 'playing',
   })
@@ -230,6 +235,15 @@ export function CameraView({
               <Volume2 className="w-4 h-4" />
             )}
           </button>
+          {onSettings && (
+            <button
+              onClick={() => onSettings(camera.id)}
+              className="bg-black/60 text-white p-1.5 rounded hover:bg-black/80 transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
           {onMaximize && (
             <button
               onClick={() => onMaximize(camera.id)}
@@ -257,14 +271,15 @@ export function CameraView({
         autoPlay
         muted={isMuted}
         playsInline
-        className="w-full h-full object-contain"
+        className="w-full h-full object-cover"
       />
 
       {/* Detection overlay */}
       {status === 'playing' && (
         <DetectionOverlay
           videoRef={videoRef}
-          getDetectionForTimestamp={getDetectionForTimestamp}
+          getLatestDetection={getLatestDetection}
+          displaySettings={displaySettings}
         />
       )}
 

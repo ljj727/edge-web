@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Video } from 'lucide-react'
 import { CameraView } from '@widgets/camera-view'
 import { cn } from '@shared/lib/cn'
+import { useCameraStore } from '@features/camera'
 import type { Camera } from '@shared/types'
 
 interface CameraGridProps {
   cameras: Camera[]
   selectedCameraIds: string[]
   onRemoveCamera?: (id: string) => void
+  onCameraSettings?: (id: string) => void
   className?: string
 }
 
@@ -15,9 +17,11 @@ export function CameraGrid({
   cameras,
   selectedCameraIds,
   onRemoveCamera,
+  onCameraSettings,
   className,
 }: CameraGridProps) {
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
+  const getDisplaySettings = useCameraStore((state) => state.getDisplaySettings)
 
   // Get selected cameras in order
   const selectedCameras = selectedCameraIds
@@ -55,6 +59,8 @@ export function CameraGrid({
             camera={maximizedCamera}
             onRemove={handleRemove}
             onMaximize={handleMaximize}
+            onSettings={onCameraSettings}
+            displaySettings={getDisplaySettings(maximizedCamera.id)}
             className="aspect-video max-h-full max-w-full"
           />
         </div>
@@ -85,6 +91,8 @@ export function CameraGrid({
               camera={camera}
               onRemove={handleRemove}
               onMaximize={handleMaximize}
+              onSettings={onCameraSettings}
+              displaySettings={getDisplaySettings(camera.id)}
               className="aspect-video"
             />
           ))}

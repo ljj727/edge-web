@@ -8,6 +8,7 @@ import { CameraForm } from '@widgets/camera-form'
 import { VisionAppPanel, type VisionApp } from '@widgets/vision-app-panel'
 import { AssignVisionAppDialog } from '@widgets/vision-app-dialog'
 import { EventSettingsDialog } from '@widgets/event-settings-dialog'
+import { CameraSettingsDialog } from '@widgets/camera-settings-dialog'
 import { cn } from '@shared/lib/cn'
 import type { CameraCreate, Camera as CameraType, App } from '@shared/types'
 
@@ -68,6 +69,10 @@ export function VideoStreamPage() {
   const [isEventSettingsOpen, setIsEventSettingsOpen] = useState(false)
   const [selectedAppForEvents, setSelectedAppForEvents] = useState<VisionApp | null>(null)
 
+  // Camera settings state
+  const [isCameraSettingsOpen, setIsCameraSettingsOpen] = useState(false)
+  const [selectedCameraForSettings, setSelectedCameraForSettings] = useState<CameraType | null>(null)
+
   const focusedCamera = cameras?.find((c) => c.id === focusedCameraId) || null
 
   const handleAddCamera = async (data: CameraCreate) => {
@@ -126,6 +131,14 @@ export function VideoStreamPage() {
     if (app) {
       setSelectedAppForEvents(app)
       setIsEventSettingsOpen(true)
+    }
+  }
+
+  const handleCameraSettings = (cameraId: string) => {
+    const camera = cameras?.find((c) => c.id === cameraId)
+    if (camera) {
+      setSelectedCameraForSettings(camera)
+      setIsCameraSettingsOpen(true)
     }
   }
 
@@ -275,6 +288,7 @@ export function VideoStreamPage() {
           cameras={cameras || []}
           selectedCameraIds={selectedCameraIds}
           onRemoveCamera={handleRemoveFromGrid}
+          onCameraSettings={handleCameraSettings}
           className="flex-1"
         />
       </div>
@@ -310,9 +324,10 @@ export function VideoStreamPage() {
             onRemoveApp={handleRemoveApp}
             onConfigureEvents={handleConfigureEvents}
             onCameraSettings={() => {
-              // TODO: Implement camera settings
-              console.log('Camera settings')
-              alert('Camera settings not implemented yet')
+              if (focusedCamera) {
+                setSelectedCameraForSettings(focusedCamera)
+                setIsCameraSettingsOpen(true)
+              }
             }}
             className="flex-1"
           />
@@ -337,6 +352,16 @@ export function VideoStreamPage() {
         app={selectedAppForEvents}
         cameraId={focusedCameraId || ''}
         cameraName={focusedCamera?.name || ''}
+      />
+
+      {/* Camera Settings Dialog */}
+      <CameraSettingsDialog
+        isOpen={isCameraSettingsOpen}
+        onClose={() => {
+          setIsCameraSettingsOpen(false)
+          setSelectedCameraForSettings(null)
+        }}
+        camera={selectedCameraForSettings}
       />
     </div>
   )

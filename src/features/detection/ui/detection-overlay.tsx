@@ -1,10 +1,19 @@
 import { useRef, useEffect, useCallback } from 'react'
 import type { DetectionObject } from '@shared/types'
+import type { CameraDisplaySettings } from '@features/camera'
 
 interface DetectionOverlayProps {
   videoRef: React.RefObject<HTMLVideoElement | null>
-  getDetectionForTimestamp: (timestampNs: number) => DetectionObject[]
+  getLatestDetection: () => DetectionObject[]
+  displaySettings?: CameraDisplaySettings
   className?: string
+}
+
+const defaultSettings: CameraDisplaySettings = {
+  showBoundingBox: true,
+  showLabel: true,
+  showTrackId: false,
+  showScore: false,
 }
 
 const LABEL_COLORS: Record<string, string> = {
@@ -45,13 +54,12 @@ function getObjectCoverTransform(
 
 export function DetectionOverlay({
   videoRef,
-  getDetectionForTimestamp,
+  getLatestDetection,
+  displaySettings = defaultSettings,
   className,
 }: DetectionOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const frameCallbackIdRef = useRef<number | null>(null)
-  // Track video start time for timestamp correlation
-  const videoStartTimeRef = useRef<number | null>(null)
 
   const draw = useCallback((objects: DetectionObject[]) => {
     const canvas = canvasRef.current
@@ -88,6 +96,9 @@ export function DetectionOverlay({
     // Clear canvas
     ctx.clearRect(0, 0, containerWidth, containerHeight)
 
+    // If nothing to show, exit early
+    if (!displaySettings.showBoundingBox) return
+
     objects.forEach((obj) => {
       const color = LABEL_COLORS[obj.label] || LABEL_COLORS.default
 
@@ -113,28 +124,42 @@ export function DetectionOverlay({
       ctx.lineWidth = 2
       ctx.strokeRect(x, y, w, h)
 
-      // Draw label background
-      const label = `${obj.label} ${(obj.score_d * 100).toFixed(0)}%`
-      ctx.font = 'bold 12px Arial'
-      const textMetrics = ctx.measureText(label)
-      const textHeight = 16
-      const padding = 4
+      // Build label text based on settings
+      const labelParts: string[] = []
+      if (displaySettings.showLabel) {
+        labelParts.push(obj.label)
+      }
+      if (displaySettings.showTrackId && obj.id !== undefined) {
+        labelParts.push(`#${obj.id}`)
+      }
+      if (displaySettings.showScore) {
+        labelParts.push(`${(obj.score_d * 100).toFixed(0)}%`)
+      }
 
-      const labelY = Math.max(y - textHeight - padding, 0)
+      // Only draw label if there's something to show
+      if (labelParts.length > 0) {
+        const label = labelParts.join(' ')
+        ctx.font = 'bold 12px Arial'
+        const textMetrics = ctx.measureText(label)
+        const textHeight = 16
+        const padding = 4
 
-      ctx.fillStyle = color
-      ctx.fillRect(
-        x,
-        labelY,
-        textMetrics.width + padding * 2,
-        textHeight + padding
-      )
+        const labelY = Math.max(y - textHeight - padding, 0)
 
-      // Draw label text
-      ctx.fillStyle = '#000000'
-      ctx.fillText(label, x + padding, labelY + textHeight - 2)
+        ctx.fillStyle = color
+        ctx.fillRect(
+          x,
+          labelY,
+          textMetrics.width + padding * 2,
+          textHeight + padding
+        )
+
+        // Draw label text
+        ctx.fillStyle = '#000000'
+        ctx.fillText(label, x + padding, labelY + textHeight - 2)
+      }
     })
-  }, [videoRef])
+  }, [videoRef, displaySettings])
 
   useEffect(() => {
     const video = videoRef.current
@@ -142,22 +167,11 @@ export function DetectionOverlay({
 
     let isActive = true
 
-    const frameCallback: VideoFrameRequestCallback = (_now, metadata) => {
+    const frameCallback: VideoFrameRequestCallback = () => {
       if (!isActive) return
 
-      // Initialize video start time on first frame
-      if (videoStartTimeRef.current === null) {
-        // Calculate when the video stream started in wall clock time
-        // now is performance.now() in ms, mediaTime is video time in seconds
-        videoStartTimeRef.current = Date.now() - (metadata.mediaTime * 1000)
-      }
-
-      // Calculate absolute timestamp for this frame (in nanoseconds)
-      const frameWallTimeMs = videoStartTimeRef.current + (metadata.mediaTime * 1000)
-      const frameTimestampNs = frameWallTimeMs * 1e6
-
-      // Get detection matching this frame's timestamp
-      const objects = getDetectionForTimestamp(frameTimestampNs)
+      // Simply use latest detection - synced by requestVideoFrameCallback timing
+      const objects = getLatestDetection()
       draw(objects)
 
       frameCallbackIdRef.current = video.requestVideoFrameCallback(frameCallback)
@@ -168,13 +182,12 @@ export function DetectionOverlay({
 
     return () => {
       isActive = false
-      videoStartTimeRef.current = null
       if (frameCallbackIdRef.current !== null) {
         video.cancelVideoFrameCallback(frameCallbackIdRef.current)
         frameCallbackIdRef.current = null
       }
     }
-  }, [videoRef, draw, getDetectionForTimestamp])
+  }, [videoRef, draw, getLatestDetection])
 
   return (
     <canvas
