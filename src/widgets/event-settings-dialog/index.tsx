@@ -84,13 +84,23 @@ export function EventSettingsDialog({
       const incomingEdge = edges.find((e) => e.target === node.id)
       const parentId = incomingEdge?.source
 
+      // Build target for Object nodes (legacy format: label, classType, resultLabel)
+      let target: { label: string; classType: string | null; resultLabel: string[] | null } | undefined
+      if (data.nodeType === 'object' && data.classes && data.classes.length > 0) {
+        target = {
+          label: data.classes[0], // First selected class
+          classType: data.classifiers && data.classifiers.length > 0 ? 'classifier' : null,
+          resultLabel: data.classifiers && data.classifiers.length > 0 ? data.classifiers : null,
+        }
+      }
+
       return {
         eventType: mapNodeTypeToEventType(data.nodeType),
         eventSettingId: node.id,
         eventSettingName: data.label,
         parentId,
         points: data.points,
-        target: data.classes ? { labels: data.classes } : undefined,
+        target,
         direction: data.direction,
         ncond: data.ncond,
         timeout: data.timeout,
