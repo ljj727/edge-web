@@ -30,8 +30,8 @@ export const API_CONFIG = {
     // License
     license: '/v2/license',
 
-    // Sensor
-    sensor: '/v2/sensor',
+    // Sensors (Alarm Devices)
+    sensors: '/v2/sensors',
 
     // System
     system: '/v2/system',

@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@shared/ui'
-import { Settings, Key, RefreshCw, Power, AlertTriangle, Radio, CheckCircle, XCircle, RotateCcw, Loader2 } from 'lucide-react'
+import {
+  Settings, Key, RefreshCw, Power, AlertTriangle, Radio,
+  CheckCircle, XCircle, RotateCcw, Loader2
+} from 'lucide-react'
 import { dxApi } from '@features/dx'
 import { useMediaMTXSettings, useUpdateMediaMTXSettings, useResetMediaMTXSettings, useTestMediaMTXConnection } from '@features/mediamtx'
 import { useSystemRestart, type RestartStep } from '@features/system'
@@ -35,7 +38,7 @@ export function SettingsPage() {
     setIsRestarting(false)
   }
 
-  // MediaMTX state - simplified to IP + ports
+  // MediaMTX state
   const [mxForm, setMxForm] = useState({
     host: 'localhost',
     apiPort: '9997',
@@ -52,7 +55,6 @@ export function SettingsPage() {
   const resetMediamtxMutation = useResetMediaMTXSettings()
   const testMediamtxMutation = useTestMediaMTXConnection()
 
-  // Helper to parse URL into host and port
   const parseUrl = (url: string, defaultPort: string) => {
     try {
       if (url.startsWith('rtsp://')) {
@@ -66,7 +68,6 @@ export function SettingsPage() {
     }
   }
 
-  // Sync form with fetched settings
   useEffect(() => {
     if (mediamtxSettings) {
       const api = parseUrl(mediamtxSettings.api_url, '9997')
@@ -85,7 +86,6 @@ export function SettingsPage() {
     }
   }, [mediamtxSettings])
 
-  // Build full URLs from host + ports for backend
   const buildUrls = () => ({
     api_url: `http://${mxForm.host}:${mxForm.apiPort}/v3`,
     hls_url: `http://${mxForm.host}:${mxForm.hlsPort}`,
@@ -121,7 +121,6 @@ export function SettingsPage() {
     queryFn: dxApi.getLicense,
   })
 
-
   const activateLicenseMutation = useMutation({
     mutationFn: (key: string) => dxApi.activateLicense(key),
     onSuccess: () => {
@@ -131,14 +130,7 @@ export function SettingsPage() {
   })
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">System Settings</h1>
-        <p className="text-muted-foreground">
-          Configure device and system settings
-        </p>
-      </div>
-
+    <div className="h-full p-6">
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Device Information */}
         <Card>
@@ -188,7 +180,7 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* License Information */}
+        {/* License */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -211,11 +203,7 @@ export function SettingsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
-                  <span
-                    className={`flex items-center gap-1 ${
-                      license.isValid ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
+                  <span className={`flex items-center gap-1 ${license.isValid ? 'text-green-600' : 'text-red-600'}`}>
                     {license.isValid ? 'Active' : 'Inactive'}
                   </span>
                 </div>
@@ -231,12 +219,8 @@ export function SettingsPage() {
                   <span className="text-muted-foreground">Max Inferences</span>
                   <span>{license.maxInferences}</span>
                 </div>
-
-                {/* Activate New License */}
                 <div className="mt-6 border-t pt-4">
-                  <p className="mb-2 text-sm font-medium">
-                    Activate New License
-                  </p>
+                  <p className="mb-2 text-sm font-medium">Activate New License</p>
                   <div className="flex gap-2">
                     <Input
                       placeholder="Enter license key"
@@ -245,9 +229,7 @@ export function SettingsPage() {
                     />
                     <Button
                       onClick={() => activateLicenseMutation.mutate(licenseKey)}
-                      disabled={
-                        !licenseKey || activateLicenseMutation.isPending
-                      }
+                      disabled={!licenseKey || activateLicenseMutation.isPending}
                     >
                       Activate
                     </Button>
@@ -292,27 +274,20 @@ export function SettingsPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Host */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Host / IP</label>
                   <Input
                     value={mxForm.host}
-                    onChange={(e) =>
-                      setMxForm((prev) => ({ ...prev, host: e.target.value }))
-                    }
+                    onChange={(e) => setMxForm((prev) => ({ ...prev, host: e.target.value }))}
                     placeholder="localhost"
                   />
                 </div>
-
-                {/* Ports */}
                 <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">API</label>
                     <Input
                       value={mxForm.apiPort}
-                      onChange={(e) =>
-                        setMxForm((prev) => ({ ...prev, apiPort: e.target.value }))
-                      }
+                      onChange={(e) => setMxForm((prev) => ({ ...prev, apiPort: e.target.value }))}
                       placeholder="9997"
                     />
                   </div>
@@ -320,9 +295,7 @@ export function SettingsPage() {
                     <label className="text-sm font-medium text-muted-foreground">HLS</label>
                     <Input
                       value={mxForm.hlsPort}
-                      onChange={(e) =>
-                        setMxForm((prev) => ({ ...prev, hlsPort: e.target.value }))
-                      }
+                      onChange={(e) => setMxForm((prev) => ({ ...prev, hlsPort: e.target.value }))}
                       placeholder="8888"
                     />
                   </div>
@@ -330,9 +303,7 @@ export function SettingsPage() {
                     <label className="text-sm font-medium text-muted-foreground">WebRTC</label>
                     <Input
                       value={mxForm.webrtcPort}
-                      onChange={(e) =>
-                        setMxForm((prev) => ({ ...prev, webrtcPort: e.target.value }))
-                      }
+                      onChange={(e) => setMxForm((prev) => ({ ...prev, webrtcPort: e.target.value }))}
                       placeholder="8889"
                     />
                   </div>
@@ -340,31 +311,23 @@ export function SettingsPage() {
                     <label className="text-sm font-medium text-muted-foreground">RTSP</label>
                     <Input
                       value={mxForm.rtspPort}
-                      onChange={(e) =>
-                        setMxForm((prev) => ({ ...prev, rtspPort: e.target.value }))
-                      }
+                      onChange={(e) => setMxForm((prev) => ({ ...prev, rtspPort: e.target.value }))}
                       placeholder="8554"
                     />
                   </div>
                 </div>
-
-                {/* Enable/Disable toggle */}
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="mediamtx-enabled"
                     checked={mxForm.enabled}
-                    onChange={(e) =>
-                      setMxForm((prev) => ({ ...prev, enabled: e.target.checked }))
-                    }
+                    onChange={(e) => setMxForm((prev) => ({ ...prev, enabled: e.target.checked }))}
                     className="h-4 w-4 rounded border-gray-300"
                   />
                   <label htmlFor="mediamtx-enabled" className="text-sm">
                     Enable MX integration
                   </label>
                 </div>
-
-                {/* Test result */}
                 {testResult && (
                   <div
                     className={`flex items-center gap-2 rounded-md p-3 text-sm ${
@@ -373,22 +336,12 @@ export function SettingsPage() {
                         : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                     }`}
                   >
-                    {testResult.success ? (
-                      <CheckCircle className="h-4 w-4" />
-                    ) : (
-                      <XCircle className="h-4 w-4" />
-                    )}
+                    {testResult.success ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                     {testResult.message}
                   </div>
                 )}
-
-                {/* Actions */}
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleMediamtxTest}
-                    disabled={testMediamtxMutation.isPending}
-                  >
+                  <Button variant="outline" onClick={handleMediamtxTest} disabled={testMediamtxMutation.isPending}>
                     {testMediamtxMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -396,21 +349,12 @@ export function SettingsPage() {
                     )}
                     Test Connection
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleMediamtxReset}
-                    disabled={resetMediamtxMutation.isPending}
-                  >
+                  <Button variant="outline" onClick={handleMediamtxReset} disabled={resetMediamtxMutation.isPending}>
                     <RotateCcw className="mr-2 h-4 w-4" />
                     Reset to Defaults
                   </Button>
-                  <Button
-                    onClick={handleMediamtxSave}
-                    disabled={updateMediamtxMutation.isPending}
-                  >
-                    {updateMediamtxMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
+                  <Button onClick={handleMediamtxSave} disabled={updateMediamtxMutation.isPending}>
+                    {updateMediamtxMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save Settings
                   </Button>
                 </div>
@@ -420,7 +364,7 @@ export function SettingsPage() {
         </Card>
 
         {/* System Actions */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Power className="h-5 w-5" />
@@ -429,14 +373,8 @@ export function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4">
-              <Button
-                variant="outline"
-                onClick={handleRestart}
-                disabled={isRestarting}
-              >
-                <RefreshCw
-                  className={cn('mr-2 h-4 w-4', isRestarting && 'animate-spin')}
-                />
+              <Button variant="outline" onClick={handleRestart} disabled={isRestarting}>
+                <RefreshCw className={cn('mr-2 h-4 w-4', isRestarting && 'animate-spin')} />
                 Restart System
               </Button>
               <Button variant="destructive">
@@ -444,22 +382,14 @@ export function SettingsPage() {
                 Factory Reset
               </Button>
             </div>
-
-            {/* Restart Progress */}
             {restartSteps.length > 0 && (
               <div className="rounded-lg border p-4 space-y-3">
                 <p className="text-sm font-medium">System Restart Progress</p>
                 {restartSteps.map((step) => (
                   <div key={step.step} className="flex items-center gap-3">
-                    {step.status === 'loading' && (
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                    )}
-                    {step.status === 'success' && (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    )}
-                    {step.status === 'error' && (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
+                    {step.status === 'loading' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+                    {step.status === 'success' && <CheckCircle className="h-4 w-4 text-green-500" />}
+                    {step.status === 'error' && <XCircle className="h-4 w-4 text-red-500" />}
                     <span
                       className={cn(
                         'text-sm',

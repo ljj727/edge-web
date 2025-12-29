@@ -9,6 +9,7 @@ import { VideoStreamPage } from '@pages/video-stream'
 import { AnalyticsPage } from '@pages/analytics'
 import { SettingsPage } from '@pages/settings'
 import { StatisticsPage } from '@pages/statistics'
+import { SensorsPage } from '@pages/sensors'
 
 export const router = createBrowserRouter([
   {
@@ -50,6 +51,10 @@ export const router = createBrowserRouter([
       {
         path: 'statistics',
         element: <StatisticsPage />,
+      },
+      {
+        path: 'sensors',
+        element: <SensorsPage />,
       },
     ],
   },

@@ -6,6 +6,16 @@ import { cn } from '@shared/lib/cn'
 // Node type definitions
 export type FlowNodeType = 'object' | 'zone' | 'line' | 'event' | 'count' | 'timeout' | 'speed' | 'merge' | 'alarm'
 
+// Alarm sensor configuration (stored in ext as JSON array)
+export interface AlarmSensorConfig {
+  id: string // sensor ID to trigger
+  typeId: string // sensor type ID
+  alarmType: string // e.g., "LED", "BUZZER", "DO"
+  alarmValue: string // e.g., "RED", "GREEN", "1"
+  duration: number // seconds
+  priority?: number
+}
+
 export interface FlowNodeData extends Record<string, unknown> {
   label: string
   nodeType: FlowNodeType
@@ -24,6 +34,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   // Alarm node
   alarmType?: string
   ext?: string
+  alarmSensors?: AlarmSensorConfig[] // parsed from ext for UI
   // Validation
   warning?: string
 }
@@ -181,7 +192,7 @@ export function getDefaultNodeData(nodeType: FlowNodeType): FlowNodeData {
     case 'timeout':
       return { ...base, timeout: 5 }
     case 'alarm':
-      return { ...base, alarmType: 'notification', ext: '' }
+      return { ...base, alarmSensors: [], ext: '[]' }
     default:
       return base
   }
