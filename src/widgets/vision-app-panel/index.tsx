@@ -3,13 +3,15 @@ import { Plus, X, FileText, Settings, Video } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
 import type { Camera } from '@shared/types'
 
-// Mock type for Vision App (will be replaced with actual type later)
-export interface VisionApp {
-  id: string
-  name: string
-  version: string
+import type { App, AppOutput } from '@shared/types'
+
+// Vision App with runtime status
+export interface VisionApp extends Pick<App, 'id' | 'name' | 'version'> {
   status: 'connected' | 'disconnected' | 'error'
+  outputs?: AppOutput[]
 }
+
+export type { AppOutput }
 
 interface VisionAppPanelProps {
   camera: Camera | null

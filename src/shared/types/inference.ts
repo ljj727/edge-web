@@ -1,34 +1,67 @@
 // Event types for inference pipeline
 export type EventType =
-  | 'RoI'
+  | 'ROI'
   | 'Line'
+  | 'And'
+  | 'Or'
   | 'Speed'
+  | 'HM'
+  | 'Filter'
+  | 'EnEx'
   | 'Alarm'
-  | 'AND'
-  | 'sensor_input'
-  | 'Object'
-  | 'Attribute'
-  | 'Timeout'
-  | 'Count'
-  | 'Merge'
+
+export type DirectionType = 'A2B' | 'B2A' | 'BOTH'
+
+export type DetectionPointType =
+  | 'leftTop' | 'centerTop' | 'rightTop'
+  | 'leftCenter' | 'center' | 'rightCenter'
+  | 'leftBottom' | 'centerBottom' | 'rightBottom'
+  | 'ALL'
+
+export interface EventTarget {
+  labels: string[]
+  classifiers?: Record<string, string[]>
+}
 
 export interface EventSetting {
   eventType: EventType
   eventSettingId: string
   eventSettingName: string
-  points?: number[][]
-  target?: string[]
-  direction?: 'in' | 'out' | 'both'
-  timeout?: number
-  ncond?: number
-  turn?: string
   parentId?: string
-  ext?: string // JSON metadata (for alarms)
+
+  // Geometry - normalized coordinates (0~1)
+  points?: [number, number][]
+
+  // Target
+  target?: EventTarget
+
+  // Timing
+  timeout?: number
+  regenInterval?: number // HM regeneration interval
+
+  // Logic
+  ncond?: string // ">=2", "==3", etc.
+  direction?: DirectionType
+  inOrder?: boolean // For And events
+  turn?: number // For Speed (0 or 1)
+
+  // Other
+  detectionPoint?: DetectionPointType
+  ext?: string // JSON metadata for Alarm
 }
 
 export interface InferenceSettings {
   version: string
   configs: EventSetting[]
+}
+
+// Event setting update response
+export interface EventSettingUpdateResponse {
+  inference: Inference
+  nats_sent: boolean
+  nats_success: boolean
+  nats_message: string
+  termEvList: string[] // Terminal event IDs for monitoring
 }
 
 export interface Inference {

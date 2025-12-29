@@ -1,35 +1,17 @@
-import { useState, useCallback } from 'react'
-import type { Node, Edge } from '@xyflow/react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@shared/ui'
-import { X } from 'lucide-react'
-import { ZoneEditor, type Zone } from './ZoneEditor'
-import { FlowEditor, type FlowNodeData, getDefaultProperties } from './FlowEditor'
-import { PropertiesPanel } from './PropertiesPanel'
+import { X, Save, RefreshCw, ChevronUp, ChevronDown, LayoutTemplate } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { Node, Edge } from '@xyflow/react'
+import { inferenceApi } from '@features/inference/api/inference-api'
+import { appApi } from '@features/app/api/app-api'
+import type { InferenceSettings, EventSetting, EventType } from '@shared/types'
 import type { VisionApp } from '@widgets/vision-app-panel'
-
-// Export types for external use
-export type { Zone } from './ZoneEditor'
-export type { FlowNodeData, FlowNodeType } from './FlowEditor'
-
-// Event configuration output format
-export interface EventConfig {
-  cameraId: string
-  appId: string
-  appName: string
-  zones: Zone[]
-  nodes: {
-    id: string
-    type: string
-    label: string
-    properties: Record<string, any>
-    position: { x: number; y: number }
-  }[]
-  edges: {
-    id: string
-    source: string
-    target: string
-  }[]
-}
+import { FlowEditor } from './FlowEditor'
+import { NodeProperties } from './NodeProperties'
+import { EventCanvas } from './EventCanvas'
+import { FlowTemplatesModal } from './FlowTemplates'
+import type { FlowNodeData, FlowNodeType } from './CustomNodes'
 
 interface EventSettingsDialogProps {
   isOpen: boolean
@@ -37,11 +19,9 @@ interface EventSettingsDialogProps {
   app: VisionApp | null
   cameraId: string
   cameraName: string
-  thumbnailUrl?: string
 }
 
-// Sample thumbnail for testing
-const SAMPLE_THUMBNAIL = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=640&h=480&fit=crop'
+const SETTINGS_VERSION = '1.6.1'
 
 export function EventSettingsDialog({
   isOpen,
@@ -49,224 +29,360 @@ export function EventSettingsDialog({
   app,
   cameraId,
   cameraName,
-  thumbnailUrl = SAMPLE_THUMBNAIL,
 }: EventSettingsDialogProps) {
-  // Zone state
-  const [zones, setZones] = useState<Zone[]>([])
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  // Flow state
-  const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([
-    {
-      id: 'object-1',
-      type: 'custom',
-      position: { x: 100, y: 50 },
-      data: { label: 'Object#1', nodeType: 'object', properties: getDefaultProperties('object') },
-    },
-  ])
+  // State
+  const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isPreviewExpanded, setIsPreviewExpanded] = useState(true)
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
-  const selectedZone = zones.find((z) => z.id === selectedZoneId) || null
+  // Load existing inference data
+  const { isLoading } = useQuery({
+    queryKey: ['inferences', cameraId],
+    queryFn: () => inferenceApi.getByVideoId(cameraId),
+    enabled: isOpen && !!cameraId,
+  })
 
-  const handleUpdateNode = useCallback((nodeId: string, updates: Partial<FlowNodeData>) => {
-    setNodes((prev) =>
-      prev.map((node) =>
-        node.id === nodeId
-          ? { ...node, data: { ...node.data, ...updates } }
-          : node
-      )
-    )
-  }, [])
+  // Load app details (for outputs/classifiers)
+  const { data: appDetails } = useQuery({
+    queryKey: ['app', app?.id],
+    queryFn: () => appApi.getById(app!.id),
+    enabled: isOpen && !!app?.id,
+  })
 
-  const handleUpdateZone = useCallback((zoneId: string, updates: Partial<Zone>) => {
-    setZones((prev) =>
-      prev.map((zone) =>
-        zone.id === zoneId ? { ...zone, ...updates } : zone
-      )
-    )
-  }, [])
+  // Load preview image
+  useEffect(() => {
+    if (!isOpen || !app?.id || !cameraId) return
 
-  const handleSelectNode = useCallback((nodeId: string | null) => {
-    setSelectedNodeId(nodeId)
-    if (nodeId) setSelectedZoneId(null)
-  }, [])
+    let cancelled = false
 
-  const handleSelectZone = useCallback((zoneId: string | null) => {
-    setSelectedZoneId(zoneId)
-    if (zoneId) setSelectedNodeId(null)
-  }, [])
+    inferenceApi.getPreview(app.id, cameraId).then((url) => {
+      if (!cancelled) setPreviewUrl(url)
+    }).catch(() => {
+      // Fallback to sample image
+      if (!cancelled) setPreviewUrl('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=640&h=480&fit=crop')
+    })
 
-  // When a zone is created, automatically add a zone node to the flow editor
-  const handleZoneCreated = useCallback((zone: Zone) => {
-    // Calculate position for the new zone node
-    const zoneNodes = nodes.filter(n => n.data.nodeType === 'zone')
-    const yOffset = 50 + (zoneNodes.length * 80)
-
-    const newNode: Node<FlowNodeData> = {
-      id: `zone-node-${zone.id}`,
-      type: 'custom',
-      position: { x: 300, y: yOffset },
-      data: {
-        label: zone.name,
-        nodeType: 'zone',
-        properties: {
-          ...getDefaultProperties('zone'),
-          zoneId: zone.id,
-        },
-      },
+    return () => {
+      cancelled = true
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
     }
-    setNodes((prev) => [...prev, newNode])
+  }, [isOpen, app?.id, cameraId])
+
+  // Convert flow nodes/edges to API format
+  const convertToApiFormat = useCallback((): InferenceSettings => {
+    // For now, create basic configs from nodes
+    const configs = nodes.map((node) => {
+      const data = node.data as FlowNodeData
+
+      // Find parent node (source of incoming edge)
+      const incomingEdge = edges.find((e) => e.target === node.id)
+      const parentId = incomingEdge?.source
+
+      return {
+        eventType: mapNodeTypeToEventType(data.nodeType),
+        eventSettingId: node.id,
+        eventSettingName: data.label,
+        parentId,
+        points: data.points,
+        target: data.classes ? { labels: data.classes } : undefined,
+        direction: data.direction,
+        ncond: data.ncond,
+        timeout: data.timeout,
+        ext: data.ext,
+      }
+    })
+
+    return {
+      version: SETTINGS_VERSION,
+      configs: configs.filter((c) => c.eventType) as any,
+    }
+  }, [nodes, edges])
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: async (settings: InferenceSettings) => {
+      if (!app?.id) throw new Error('No app selected')
+      return inferenceApi.updateEventSettings(app.id, cameraId, settings)
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['inferences'] })
+      console.log('Event settings saved:', data)
+      if (data.nats_success) {
+        alert('Settings saved successfully!')
+      } else {
+        alert(`Settings saved but compositor failed: ${data.nats_message}`)
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to save event settings:', error)
+      alert('Failed to save settings')
+    },
+  })
+
+  // Get selected node
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
+
+  // Map flow node type to API event type
+  const nodeTypeToEventType = (nodeType: FlowNodeType): EventType | null => {
+    const mapping: Record<FlowNodeType, EventType | null> = {
+      object: null, // Object doesn't have geometry
+      zone: 'ROI',
+      line: 'Line',
+      event: null,
+      count: null,
+      timeout: null,
+      speed: null,
+      merge: null,
+      alarm: null,
+    }
+    return mapping[nodeType]
+  }
+
+  // Get nodes with geometry for preview as EventSetting[]
+  const geometryEvents: EventSetting[] = useMemo(() => {
+    return nodes
+      .filter((n) => {
+        const data = n.data as FlowNodeData
+        return data.points && ['zone', 'line'].includes(data.nodeType)
+      })
+      .map((n) => {
+        const data = n.data as FlowNodeData
+        return {
+          eventSettingId: n.id,
+          eventSettingName: data.label,
+          eventType: nodeTypeToEventType(data.nodeType) || 'ROI',
+          points: data.points,
+          direction: data.direction,
+        } as EventSetting
+      })
   }, [nodes])
 
-  // When a zone is deleted, also remove the corresponding zone node
-  const handleDeleteZone = useCallback((zoneId: string) => {
-    // Remove zone
-    setZones((prev) => prev.filter(z => z.id !== zoneId))
-    // Remove corresponding zone node and its edges
-    const zoneNodeId = `zone-node-${zoneId}`
-    setNodes((prev) => prev.filter(n => n.id !== zoneNodeId))
-    setEdges((prev) => prev.filter(e => e.source !== zoneNodeId && e.target !== zoneNodeId))
-    if (selectedZoneId === zoneId) setSelectedZoneId(null)
-  }, [selectedZoneId])
+  // Handlers
+  const handleNodesChange = useCallback((newNodes: Node[]) => {
+    setNodes(newNodes)
+  }, [])
 
-  const handleSave = () => {
-    const config: EventConfig = {
-      cameraId,
-      appId: app?.id || '',
-      appName: app?.name || '',
-      zones,
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.data.nodeType,
-        label: n.data.label,
-        properties: n.data.properties,
-        position: n.position,
-      })),
-      edges: edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-      })),
+  const handleEdgesChange = useCallback((newEdges: Edge[]) => {
+    setEdges(newEdges)
+  }, [])
+
+  const handleUpdateNode = useCallback((nodeId: string, data: Partial<FlowNodeData>) => {
+    setNodes((prev) =>
+      prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n))
+    )
+  }, [])
+
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodes((prev) => prev.filter((n) => n.id !== nodeId))
+    setEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId))
+    if (selectedNodeId === nodeId) {
+      setSelectedNodeId(null)
+    }
+  }, [selectedNodeId])
+
+  const handleUpdatePoints = useCallback((nodeId: string, points: [number, number][]) => {
+    setNodes((prev) =>
+      prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, points } } : n))
+    )
+  }, [])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const settings = convertToApiFormat()
+      await updateMutation.mutateAsync(settings)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleReset = () => {
+    if (confirm('Reset all changes? This will clear all nodes.')) {
+      setNodes([])
+      setEdges([])
+      setSelectedNodeId(null)
+    }
+  }
+
+  const handleApplyTemplate = useCallback((templateNodes: Node[], templateEdges: Edge[]) => {
+    // Calculate offset to avoid overlapping with existing nodes
+    let offsetX = 0
+    if (nodes.length > 0) {
+      const maxX = Math.max(...nodes.map(n => n.position.x))
+      offsetX = maxX + 250 // Add some spacing
     }
 
-    console.log('=== Event Configuration JSON ===')
-    console.log(JSON.stringify(config, null, 2))
-    console.log('================================')
+    // Apply offset to template nodes
+    const offsetNodes = templateNodes.map(node => ({
+      ...node,
+      position: {
+        x: node.position.x + offsetX,
+        y: node.position.y,
+      },
+    }))
 
-    alert('Event configuration logged to console!')
-    onClose()
-  }
+    // Append to existing nodes and edges
+    setNodes(prev => [...prev, ...offsetNodes])
+    setEdges(prev => [...prev, ...templateEdges])
+    setSelectedNodeId(null)
+  }, [nodes])
 
   if (!isOpen || !app) return null
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-7xl h-[90vh] flex flex-col">
+      <div className="bg-background rounded-lg shadow-xl w-full max-w-7xl h-[95vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b shrink-0">
+        <div className="flex items-center justify-between p-3 border-b shrink-0">
           <div>
             <h2 className="text-lg font-semibold">Event Settings</h2>
             <p className="text-sm text-muted-foreground">
-              {app.name} v{app.version} on {cameraName}
+              {app.name} on {cameraName}
             </p>
           </div>
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsTemplateModalOpen(true)}
+              disabled={isSaving}
+            >
+              <LayoutTemplate className="h-4 w-4 mr-1" />
+              Add Template
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReset}
+              disabled={isSaving}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Reset
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={isSaving || updateMutation.isPending}
+            >
+              <Save className="h-4 w-4 mr-1" />
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="flex flex-1 min-h-0">
-          {/* Left: Zone Editor */}
-          <div className="w-[500px] border-r flex flex-col shrink-0">
-            <div className="p-2 border-b text-sm font-medium">Zone Editor</div>
-            <div className="flex-1 p-2 overflow-auto">
-              <ZoneEditor
-                thumbnailUrl={thumbnailUrl}
-                zones={zones}
-                selectedZoneId={selectedZoneId}
-                onZonesChange={setZones}
-                onSelectZone={handleSelectZone}
-                onZoneCreated={handleZoneCreated}
-                width={480}
-                height={360}
-              />
-              {/* Zone list */}
-              <div className="mt-2 space-y-1">
-                {zones.map((zone) => (
-                  <div
-                    key={zone.id}
-                    className={`flex items-center justify-between p-2 rounded text-sm cursor-pointer ${
-                      zone.id === selectedZoneId ? 'bg-primary/20' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => handleSelectZone(zone.id)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded"
-                        style={{ backgroundColor: zone.color }}
-                      />
-                      {zone.name}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 w-6 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteZone(zone.id)
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Middle: Flow Editor */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="p-2 border-b text-sm font-medium">Flow Editor</div>
-            <div className="flex-1">
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Top: Flow Editor + Properties */}
+          <div className="flex-1 flex min-h-0">
+            {/* Flow Editor (Toolbox + Canvas) */}
+            <div className="flex-1 min-w-0">
               <FlowEditor
                 nodes={nodes}
                 edges={edges}
-                onNodesChange={setNodes}
-                onEdgesChange={setEdges}
-                onSelectNode={handleSelectNode}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onSelectNode={setSelectedNodeId}
                 selectedNodeId={selectedNodeId}
-                onDeleteZone={handleDeleteZone}
+              />
+            </div>
+
+            {/* Right: Properties */}
+            <div className="w-72 border-l shrink-0">
+              <NodeProperties
+                node={selectedNode}
+                onUpdate={handleUpdateNode}
+                onDelete={handleDeleteNode}
+                appOutputs={appDetails?.outputs}
               />
             </div>
           </div>
 
-          {/* Right: Properties Panel */}
-          <div className="w-64 border-l shrink-0">
-            <div className="p-2 border-b text-sm font-medium">Properties</div>
-            <PropertiesPanel
-              selectedNode={selectedNode}
-              selectedZone={selectedZone}
-              zones={zones}
-              onUpdateNode={handleUpdateNode}
-              onUpdateZone={handleUpdateZone}
-            />
+          {/* Bottom: Preview Panel (collapsible) */}
+          <div className="border-t shrink-0">
+            <button
+              className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium hover:bg-muted/50"
+              onClick={() => setIsPreviewExpanded(!isPreviewExpanded)}
+            >
+              <span>Video Preview</span>
+              {isPreviewExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
+            </button>
+
+            {isPreviewExpanded && (
+              <div className="p-4 pt-0">
+                {isLoading ? (
+                  <div className="h-48 flex items-center justify-center text-muted-foreground">
+                    Loading preview...
+                  </div>
+                ) : previewUrl ? (
+                  <div className="flex justify-center">
+                    <EventCanvas
+                      imageUrl={previewUrl}
+                      events={geometryEvents}
+                      selectedId={selectedNodeId}
+                      onUpdatePoints={handleUpdatePoints}
+                      width={640}
+                      height={360}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-muted-foreground">
+                    No preview available
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t shrink-0">
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-          <Button onClick={handleSave}>Save & Log JSON</Button>
+        <div className="flex items-center justify-between px-4 py-2 border-t text-xs text-muted-foreground">
+          <span>
+            {nodes.length} nodes, {edges.length} connections
+          </span>
+          <span>
+            Drag to select · Space+Drag to pan · Del to delete
+          </span>
         </div>
       </div>
+
+      {/* Template Modal */}
+      <FlowTemplatesModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onSelectTemplate={handleApplyTemplate}
+      />
     </div>
   )
 }
 
-// Re-export old interface for backward compatibility
-export type { EventRule } from './types'
+// Helper function to map node type to API event type
+function mapNodeTypeToEventType(nodeType: string): string | null {
+  const mapping: Record<string, string> = {
+    object: 'Object',
+    zone: 'ROI',
+    line: 'Line',
+    event: 'Event',
+    count: 'Count',
+    timeout: 'Timeout',
+    speed: 'Speed',
+    merge: 'Merge',
+    alarm: 'Alarm',
+  }
+  return mapping[nodeType] || null
+}
+
+// Re-export types
+export type { FlowNodeData, FlowNodeType } from './CustomNodes'

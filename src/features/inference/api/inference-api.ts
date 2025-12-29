@@ -1,6 +1,6 @@
 import { api, apiClient } from '@shared/api/client'
 import { API_CONFIG } from '@shared/config/api'
-import type { Inference, InferenceSettings, StreamResponse, InferenceStatusResponse } from '@shared/types'
+import type { Inference, InferenceSettings, StreamResponse, InferenceStatusResponse, EventSettingUpdateResponse } from '@shared/types'
 
 const { endpoints } = API_CONFIG
 
@@ -43,7 +43,7 @@ export const inferenceApi = {
     videoId: string,
     settings: InferenceSettings
   ) =>
-    api.put<void>(
+    api.put<EventSettingUpdateResponse>(
       `${endpoints.inferenceEventSetting}?appId=${appId}&videoId=${videoId}`,
       { settings }
     ),
