@@ -21,7 +21,7 @@ interface EventSettingsDialogProps {
   cameraName: string
 }
 
-const SETTINGS_VERSION = '1.6.1'
+const SETTINGS_VERSION = '1.7.0'
 
 export function EventSettingsDialog({
   isOpen,
