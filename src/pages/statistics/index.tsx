@@ -549,25 +549,42 @@ export function StatisticsPage() {
                 ) : trendData ? (
                   <>
                     {/* Simple Bar Chart */}
-                    <div className="h-64 flex items-end justify-around gap-1 border-b border-l p-4">
-                      {trendData.labels.map((label, idx) => {
+                    <div className="border rounded-lg p-4">
+                      {(() => {
+                        const chartHeight = 192 // h-48 = 12rem = 192px
                         const totalSeries = trendData.series.find(s => s.event_type === 'total')
-                        const value = totalSeries?.data[idx] ?? 0
-                        const maxValue = Math.max(...(totalSeries?.data ?? [1]))
-                        const height = maxValue > 0 ? (value / maxValue) * 100 : 0
+                        const maxValue = Math.max(...(totalSeries?.data ?? [1]), 1)
                         return (
-                          <div key={idx} className="flex flex-col items-center gap-1 flex-1">
-                            <div
-                              className="w-full bg-primary/80 rounded-t transition-all hover:bg-primary min-h-[2px]"
-                              style={{ height: `${height}%` }}
-                              title={`${value} events`}
-                            />
-                            <span className="text-xs text-muted-foreground truncate max-w-full">
-                              {label}
-                            </span>
+                          <div className="flex items-end gap-[2px]" style={{ height: chartHeight }}>
+                            {trendData.labels.map((label, idx) => {
+                              const value = totalSeries?.data[idx] ?? 0
+                              const barHeight = maxValue > 0 ? (value / maxValue) * chartHeight : 0
+                              return (
+                                <div
+                                  key={idx}
+                                  className="flex-1 bg-primary/80 hover:bg-primary rounded-t transition-all cursor-pointer group relative"
+                                  style={{ height: Math.max(barHeight, value > 0 ? 4 : 0) }}
+                                >
+                                  {/* Tooltip on hover */}
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-popover border rounded shadow-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                    <div className="font-medium">{label}</div>
+                                    <div className="text-muted-foreground">{value} events</div>
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
                         )
-                      })}
+                      })()}
+                      {/* X-axis labels - show fewer labels to avoid crowding */}
+                      <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                        {trendData.labels.filter((_, i) => {
+                          const step = Math.ceil(trendData.labels.length / 10)
+                          return i % step === 0 || i === trendData.labels.length - 1
+                        }).map((label) => (
+                          <span key={label}>{label}</span>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Data Table */}
