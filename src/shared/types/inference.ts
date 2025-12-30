@@ -72,7 +72,7 @@ export interface Inference {
   name: string
   type: string
   settings: InferenceSettings
-  nodeSettings: string // JSON string of Rappid graph
+  nodeSettings: Record<string, unknown> | string | null // JSON object or string of flow graph
 }
 
 export interface InferenceWithAnalytics extends Inference {

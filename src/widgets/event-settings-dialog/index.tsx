@@ -187,7 +187,10 @@ export function EventSettingsDialog({
       // First try to load from nodeSettings (contains complete flow graph including Object/Event nodes)
       if (inference.nodeSettings) {
         try {
-          const parsed = JSON.parse(inference.nodeSettings)
+          // nodeSettings can be either a string (JSON) or already parsed object from API
+          const parsed = typeof inference.nodeSettings === 'string'
+            ? JSON.parse(inference.nodeSettings)
+            : inference.nodeSettings
           if (parsed.nodes && parsed.edges) {
             setNodes(parsed.nodes)
             setEdges(parsed.edges)
