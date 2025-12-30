@@ -183,10 +183,27 @@ export function EventSettingsDialog({
 
     // Find inference for current app
     const inference = inferences.find(inf => inf.appId === app.id)
-    if (inference?.settings?.configs && inference.settings.configs.length > 0) {
-      const { nodes: loadedNodes, edges: loadedEdges } = convertConfigsToFlow(inference.settings.configs)
-      setNodes(loadedNodes)
-      setEdges(loadedEdges)
+    if (inference) {
+      // First try to load from nodeSettings (contains complete flow graph including Object/Event nodes)
+      if (inference.nodeSettings) {
+        try {
+          const parsed = JSON.parse(inference.nodeSettings)
+          if (parsed.nodes && parsed.edges) {
+            setNodes(parsed.nodes)
+            setEdges(parsed.edges)
+            setIsLoaded(true)
+            return
+          }
+        } catch (e) {
+          console.error('Failed to parse nodeSettings:', e)
+        }
+      }
+      // Fallback to reconstructing from configs (may lose Object/Event nodes)
+      if (inference.settings?.configs && inference.settings.configs.length > 0) {
+        const { nodes: loadedNodes, edges: loadedEdges } = convertConfigsToFlow(inference.settings.configs)
+        setNodes(loadedNodes)
+        setEdges(loadedEdges)
+      }
     }
     setIsLoaded(true)
   }, [isOpen, app?.id, inferences, isLoaded])
@@ -309,9 +326,9 @@ export function EventSettingsDialog({
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async (settings: InferenceSettings) => {
+    mutationFn: async ({ settings, nodeSettings }: { settings: InferenceSettings; nodeSettings?: string }) => {
       if (!app?.id) throw new Error('No app selected')
-      return inferenceApi.updateEventSettings(app.id, cameraId, settings)
+      return inferenceApi.updateEventSettings(app.id, cameraId, settings, nodeSettings)
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['inferences'] })
@@ -399,7 +416,9 @@ export function EventSettingsDialog({
     setIsSaving(true)
     try {
       const settings = convertToApiFormat()
-      await updateMutation.mutateAsync(settings)
+      // Save complete flow graph as JSON for full restoration (including Object/Event nodes)
+      const nodeSettings = JSON.stringify({ nodes, edges })
+      await updateMutation.mutateAsync({ settings, nodeSettings })
     } finally {
       setIsSaving(false)
     }

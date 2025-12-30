@@ -41,11 +41,12 @@ export const inferenceApi = {
   updateEventSettings: (
     appId: string,
     videoId: string,
-    settings: InferenceSettings
+    settings: InferenceSettings,
+    nodeSettings?: string // JSON string of complete flow graph for UI restoration
   ) =>
     api.put<EventSettingUpdateResponse>(
       `${endpoints.inferenceEventSetting}?appId=${appId}&videoId=${videoId}`,
-      { settings }
+      { settings, nodeSettings }
     ),
 
   // Get preview image - returns binary JPEG blob
