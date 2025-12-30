@@ -11,7 +11,7 @@ import { FlowEditor } from './FlowEditor'
 import { NodeProperties } from './NodeProperties'
 import { EventCanvas } from './EventCanvas'
 import { FlowTemplatesModal } from './FlowTemplates'
-import type { FlowNodeData, FlowNodeType } from './CustomNodes'
+import type { FlowNodeData, FlowNodeType, AlarmSensorConfig } from './CustomNodes'
 
 interface EventSettingsDialogProps {
   isOpen: boolean
@@ -22,6 +22,134 @@ interface EventSettingsDialogProps {
 }
 
 const SETTINGS_VERSION = '1.7.0'
+
+// Convert API event type to flow node type
+function mapEventTypeToNodeType(eventType: EventType): FlowNodeType | null {
+  const mapping: Record<string, FlowNodeType | null> = {
+    'RoI': 'zone',
+    'Line': 'line',
+    'And': 'merge',
+    'Or': 'merge',
+    'Speed': 'speed',
+    'Filter': 'count', // Could be count or timeout
+    'Alarm': 'alarm',
+    'Heatmap': null,
+    'Enter-Exit': null,
+  }
+  return mapping[eventType] ?? null
+}
+
+// Convert saved configs to flow nodes and edges
+function convertConfigsToFlow(configs: EventSetting[]): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = []
+  const edges: Edge[] = []
+  const processedIds = new Set<string>()
+
+  // First pass: create nodes with auto-layout
+  let xPos = 100
+  let yPos = 100
+  const ROW_HEIGHT = 150
+  const COL_WIDTH = 200
+
+  // Group by hierarchy level for positioning
+  const rootConfigs = configs.filter(c => !c.parentId)
+  const childConfigs = configs.filter(c => c.parentId)
+
+  // Process root nodes first
+  rootConfigs.forEach((config, index) => {
+    const nodeType = mapEventTypeToNodeType(config.eventType)
+    if (!nodeType) return
+
+    // Parse ext for alarm sensors
+    let alarmSensors: AlarmSensorConfig[] = []
+    if (config.eventType === 'Alarm' && config.ext) {
+      try {
+        alarmSensors = JSON.parse(config.ext)
+      } catch { /* ignore */ }
+    }
+
+    nodes.push({
+      id: config.eventSettingId,
+      type: 'custom',
+      position: { x: xPos + index * COL_WIDTH, y: yPos },
+      data: {
+        label: config.eventSettingName,
+        nodeType,
+        points: config.points,
+        direction: config.direction,
+        ncond: config.ncond,
+        timeout: config.timeout,
+        ext: config.ext,
+        alarmSensors,
+      } as FlowNodeData,
+    })
+    processedIds.add(config.eventSettingId)
+  })
+
+  // Process child nodes (may need multiple passes for deep hierarchies)
+  let currentY = yPos + ROW_HEIGHT
+  let remaining = [...childConfigs]
+  let maxIterations = 10
+
+  while (remaining.length > 0 && maxIterations > 0) {
+    const nextRemaining: EventSetting[] = []
+
+    remaining.forEach((config, index) => {
+      // Check if parent is already processed
+      if (config.parentId && processedIds.has(config.parentId)) {
+        const nodeType = mapEventTypeToNodeType(config.eventType)
+        if (!nodeType) return
+
+        // Find parent node position for relative positioning
+        const parentNode = nodes.find(n => n.id === config.parentId)
+        const parentX = parentNode?.position.x || xPos
+
+        // Parse ext for alarm sensors
+        let alarmSensors: AlarmSensorConfig[] = []
+        if (config.eventType === 'Alarm' && config.ext) {
+          try {
+            alarmSensors = JSON.parse(config.ext)
+          } catch { /* ignore */ }
+        }
+
+        nodes.push({
+          id: config.eventSettingId,
+          type: 'custom',
+          position: { x: parentX + index * 50, y: currentY },
+          data: {
+            label: config.eventSettingName,
+            nodeType,
+            points: config.points,
+            direction: config.direction,
+            ncond: config.ncond,
+            timeout: config.timeout,
+            ext: config.ext,
+            alarmSensors,
+          } as FlowNodeData,
+        })
+        processedIds.add(config.eventSettingId)
+
+        // Create edge from parent
+        edges.push({
+          id: `e-${config.parentId}-${config.eventSettingId}`,
+          source: config.parentId,
+          target: config.eventSettingId,
+          type: 'deletable',
+          animated: true,
+          style: { stroke: '#888', strokeWidth: 2 },
+        })
+      } else {
+        nextRemaining.push(config)
+      }
+    })
+
+    remaining = nextRemaining
+    currentY += ROW_HEIGHT
+    maxIterations--
+  }
+
+  return { nodes, edges }
+}
 
 export function EventSettingsDialog({
   isOpen,
@@ -40,13 +168,38 @@ export function EventSettingsDialog({
   const [isSaving, setIsSaving] = useState(false)
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(true)
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   // Load existing inference data
-  const { isLoading } = useQuery({
+  const { data: inferences, isLoading } = useQuery({
     queryKey: ['inferences', cameraId],
     queryFn: () => inferenceApi.getByVideoId(cameraId),
     enabled: isOpen && !!cameraId,
   })
+
+  // Load saved settings when dialog opens
+  useEffect(() => {
+    if (!isOpen || !app?.id || !inferences || isLoaded) return
+
+    // Find inference for current app
+    const inference = inferences.find(inf => inf.appId === app.id)
+    if (inference?.settings?.configs && inference.settings.configs.length > 0) {
+      const { nodes: loadedNodes, edges: loadedEdges } = convertConfigsToFlow(inference.settings.configs)
+      setNodes(loadedNodes)
+      setEdges(loadedEdges)
+    }
+    setIsLoaded(true)
+  }, [isOpen, app?.id, inferences, isLoaded])
+
+  // Reset loaded flag when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsLoaded(false)
+      setNodes([])
+      setEdges([])
+      setSelectedNodeId(null)
+    }
+  }, [isOpen])
 
   // Load app details (for outputs/classifiers)
   const { data: appDetails } = useQuery({
