@@ -535,10 +535,10 @@ export function StatisticsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">
-                  {trendUnit === 'day' && 'Hourly Trend'}
-                  {trendUnit === 'month' && 'Daily Trend'}
-                  {trendUnit === 'quarter' && 'Monthly Trend'}
-                  {trendUnit === 'year' && 'Quarterly Trend'}
+                  {trendUnit === 'day' && 'Daily Trend (Last 30 Days)'}
+                  {trendUnit === 'month' && 'Monthly Trend (Last 12 Months)'}
+                  {trendUnit === 'quarter' && 'Quarterly Trend (Last 8 Quarters)'}
+                  {trendUnit === 'year' && 'Yearly Trend (Last 5 Years)'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
