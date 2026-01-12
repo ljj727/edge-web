@@ -135,7 +135,7 @@ export function CameraGrid({
     const maximizedCamera = selectedCameras.find((c) => c.id === maximizedId)
     if (maximizedCamera) {
       return (
-        <div className={cn('h-full p-2 bg-gray-900 flex items-center justify-center', className)}>
+        <div className={cn('h-full min-h-0 p-2 bg-gray-900 flex items-center justify-center', className)}>
           <CameraView
             camera={maximizedCamera}
             onRemove={handleRemove}
@@ -143,15 +143,18 @@ export function CameraGrid({
             onSettings={onCameraSettings}
             onEventTriggered={onEventTriggered}
             displaySettings={getDisplaySettings(maximizedCamera.id)}
-            className="max-h-full max-w-full"
+            className="h-full max-w-full"
           />
         </div>
       )
     }
   }
 
+  // Minimum height for the grid
+  const minGridHeight = 300
+
   return (
-    <div className={cn('h-full p-2 bg-gray-900', className)}>
+    <div className={cn('h-full p-2 bg-gray-900', className)} style={{ minHeight: minGridHeight }}>
       {selectedCameras.length === 0 ? (
         // Empty state
         <div className="h-full flex flex-col items-center justify-center text-gray-500">
@@ -162,7 +165,7 @@ export function CameraGrid({
       ) : (
         // Horizontal layout for portrait videos: cam1 | cam2 | cam3 | cam4
         <div
-          className="h-full flex flex-row items-stretch justify-center gap-2 px-2"
+          className="h-full flex flex-row items-center justify-center gap-2 px-2"
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
           onDragLeave={handleDragLeave}
@@ -176,7 +179,7 @@ export function CameraGrid({
               <div
                 key={camera.id}
                 className={cn(
-                  'relative flex-1 max-w-[25%] flex flex-col',
+                  'relative h-full min-h-0 flex flex-col items-center justify-center',
                   isDragging && 'opacity-30'
                 )}
               >
@@ -201,18 +204,20 @@ export function CameraGrid({
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 -translate-x-2 rounded-full z-50 shadow-[0_0_12px_3px_rgba(59,130,246,0.6)]" />
                 )}
 
-                {/* Drag Handle Bar */}
-                <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, camera.id)}
-                  onDragEnd={handleDragEnd}
-                  className="h-6 bg-gray-700 hover:bg-gray-600 rounded-t-lg flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 z-50"
-                >
-                  <GripHorizontal className="w-4 h-4 text-gray-400" />
-                </div>
+                {/* Camera container with drag handle */}
+                <div className="h-full flex flex-col items-center">
+                  {/* Drag Handle Bar */}
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, camera.id)}
+                    onDragEnd={handleDragEnd}
+                    className="w-full h-6 bg-gray-700 hover:bg-gray-600 rounded-t-lg flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 z-50"
+                    style={{ maxWidth: 'inherit' }}
+                  >
+                    <GripHorizontal className="w-4 h-4 text-gray-400" />
+                  </div>
 
-                {/* Camera View */}
-                <div className="flex-1 min-h-0">
+                  {/* Camera View - takes remaining height */}
                   <CameraView
                     camera={camera}
                     onRemove={handleRemove}
@@ -220,7 +225,7 @@ export function CameraGrid({
                     onSettings={onCameraSettings}
                     onEventTriggered={onEventTriggered}
                     displaySettings={getDisplaySettings(camera.id)}
-                    className="h-full w-full rounded-t-none"
+                    className="flex-1 min-h-0 rounded-t-none"
                   />
                 </div>
 

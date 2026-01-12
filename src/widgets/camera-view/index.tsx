@@ -407,6 +407,10 @@ export function CameraView({
     offline: 'Offline',
   }
 
+  // Small fixed minimum size - allows shrinking for multiple cameras
+  const minWidth = 150
+  const minHeight = minWidth / aspectRatio
+
   return (
     <div
       ref={containerRef}
@@ -414,7 +418,11 @@ export function CameraView({
         'relative bg-black rounded-lg overflow-hidden group',
         className
       )}
-      style={{ aspectRatio: aspectRatio }}
+      style={{
+        aspectRatio,
+        minWidth,
+        minHeight,
+      }}
     >
       {/* Status indicator */}
       <div className="absolute top-2 left-2 z-10 flex items-center gap-2">

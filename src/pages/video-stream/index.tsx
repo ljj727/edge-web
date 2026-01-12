@@ -109,7 +109,7 @@ export function VideoStreamPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-auto min-h-0">
         {/* Video Grid */}
         {selectedCameraIds.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
