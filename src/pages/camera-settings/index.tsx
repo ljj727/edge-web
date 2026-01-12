@@ -37,35 +37,43 @@ function getLabelInfo(label: string): { icon: LucideIcon; name: string } {
 const CAMERA_TEMPLATES = {
   // 전방 우측 (cam1)
   frontRight: {
-    zone: [[0.05, 0.94], [0.25, 0.02], [0.95, 0.05], [0.85, 0.90]] as [number, number][],
-    line1: [[0.39, 0.99], [0.88, 0.30]] as [number, number][],
+    zone: [[0.0547, 0.9373], [0.2517, 0.0197], [0.9475, 0.0455], [0.8484, 0.8954]] as [number, number][],
+    line1: [[0, 0.7358], [0.5342, 0.9104]] as [number, number][],
     line1Direction: 'A2B' as const,
-    line2: [[0.01, 0.72], [0.66, 0.92]] as [number, number][],
-    line2Direction: 'A2B' as const,
+    line1WarningDistance: 0,
+    line2: [[0.8583, 0.3043], [0.4908, 0.8976]] as [number, number][],
+    line2Direction: 'B2A' as const,
+    line2WarningDistance: 0.03,
   },
   // 전방 좌측 (cam2)
   frontLeft: {
     zone: [[0.05, 0.05], [0.95, 0.02], [0.75, 0.90], [0.15, 0.94]] as [number, number][],
     line1: [[0.12, 0.30], [0.61, 0.99]] as [number, number][],
     line1Direction: 'A2B' as const,
+    line1WarningDistance: 0,
     line2: [[0.34, 0.92], [0.99, 0.72]] as [number, number][],
     line2Direction: 'A2B' as const,
+    line2WarningDistance: 0.03,
   },
   // 후방 우측 (cam4)
   rearRight: {
     zone: [[0.15, 0.06], [0.85, 0.10], [0.95, 0.95], [0.05, 0.98]] as [number, number][],
     line1: [[0.88, 0.70], [0.39, 0.01]] as [number, number][],
     line1Direction: 'B2A' as const,
+    line1WarningDistance: 0,
     line2: [[0.66, 0.08], [0.01, 0.28]] as [number, number][],
     line2Direction: 'B2A' as const,
+    line2WarningDistance: 0.03,
   },
   // 후방 좌측 (cam5)
   rearLeft: {
     zone: [[0.15, 0.10], [0.85, 0.06], [0.95, 0.98], [0.05, 0.95]] as [number, number][],
     line1: [[0.12, 0.70], [0.61, 0.01]] as [number, number][],
     line1Direction: 'B2A' as const,
+    line1WarningDistance: 0,
     line2: [[0.34, 0.08], [0.99, 0.28]] as [number, number][],
     line2Direction: 'B2A' as const,
+    line2WarningDistance: 0.03,
   },
 }
 
@@ -699,10 +707,10 @@ function CameraSettingsPanel({ camera, apps, updateCamera }: CameraSettingsPanel
     setZone(template.zone)
     setLine1(template.line1)
     setLine1Direction(template.line1Direction)
+    setLine1WarningDistance(template.line1WarningDistance)
     setLine2(template.line2)
     setLine2Direction(template.line2Direction)
-    setLine1WarningDistance(0.03)
-    setLine2WarningDistance(0.03)
+    setLine2WarningDistance(template.line2WarningDistance)
   }
 
   const elements = [

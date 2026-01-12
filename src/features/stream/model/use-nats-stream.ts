@@ -120,6 +120,11 @@ export function useNatsStream({
               latestFrameRef.current = data
               imageDataUrlRef.current = `data:image/jpeg;base64,${data.image}`
 
+              // Debug: log events
+              if ((data as any).events) {
+                console.log('NATS events:', (data as any).events)
+              }
+
               // Update state (throttled to avoid too many re-renders)
               setState((prev) => ({
                 ...prev,
