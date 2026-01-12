@@ -5,4 +5,7 @@ export type {
   Detection,
   DetectionBBox,
   NatsStreamFrame,
+  EventAlert,
+  EventStatus,
+  EventsMap,
 } from './model/use-nats-stream'

@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { X, Maximize2, Settings } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
-import { useNatsStream, type Detection } from '@features/stream'
+import { useNatsStream, type Detection, type EventAlert } from '@features/stream'
 import { useInferencesByVideo } from '@features/inference'
 import type { CameraDisplaySettings } from '@features/camera'
 import type { Camera, CameraPlayerStatus } from '@shared/types'
@@ -45,6 +45,7 @@ interface CameraViewProps {
   onRemove?: (id: string) => void
   onMaximize?: (id: string) => void
   onSettings?: (id: string) => void
+  onEventTriggered?: (alert: EventAlert) => void
   displaySettings?: CameraDisplaySettings
   className?: string
   showControls?: boolean
@@ -55,6 +56,7 @@ export function CameraView({
   onRemove,
   onMaximize,
   onSettings,
+  onEventTriggered,
   displaySettings,
   className,
   showControls = true,
@@ -70,6 +72,14 @@ export function CameraView({
   const { data: inferences } = useInferencesByVideo(camera.id)
   const eventConfigs = inferences?.[0]?.settings?.configs || []
 
+  // Handle event with camera name
+  const handleEventTriggered = useCallback((alert: EventAlert) => {
+    onEventTriggered?.({
+      ...alert,
+      cameraName: camera.name,
+    })
+  }, [onEventTriggered, camera.name])
+
   // NATS stream hook
   const {
     isConnected,
@@ -82,6 +92,7 @@ export function CameraView({
     natsWsUrl: camera.nats_ws_url,
     natsSubject: camera.nats_subject,
     enabled: true,
+    onEventTriggered: handleEventTriggered,
   })
 
   // Update status based on connection

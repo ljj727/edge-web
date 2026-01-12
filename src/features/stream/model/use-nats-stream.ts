@@ -19,6 +19,27 @@ export interface Detection {
   keypoints?: [number, number, number][] // [x, y, confidence] normalized 0-1
 }
 
+// Event status from detection
+// ROI: status 2 = triggered
+// Line: status 0 = safe, 1 = warning, 2 = danger
+export interface EventStatus {
+  labels: string[]
+  status: number
+}
+
+// Events map (eventSettingId -> status)
+export type EventsMap = Record<string, EventStatus>
+
+// Event alert for UI display
+export interface EventAlert {
+  id: string
+  timestamp: number
+  eventId: string // e.g., "roi", "line-front", "line-side"
+  labels: string[]
+  status: number
+  thumbnail: string // base64 image
+  cameraName?: string
+}
 
 // NATS stream frame data
 export interface NatsStreamFrame {
@@ -29,6 +50,7 @@ export interface NatsStreamFrame {
   width: number
   height: number
   detections: Detection[]
+  events?: EventsMap
   image: string // Base64 encoded JPEG
 }
 
@@ -36,6 +58,7 @@ interface UseNatsStreamOptions {
   natsWsUrl: string | null | undefined
   natsSubject: string | null | undefined
   enabled?: boolean
+  onEventTriggered?: (alert: EventAlert) => void
 }
 
 interface NatsStreamState {
@@ -50,6 +73,7 @@ export function useNatsStream({
   natsWsUrl,
   natsSubject,
   enabled = true,
+  onEventTriggered,
 }: UseNatsStreamOptions) {
   const [state, setState] = useState<NatsStreamState>({
     isConnected: false,
@@ -66,6 +90,9 @@ export function useNatsStream({
   // Store latest frame data
   const latestFrameRef = useRef<NatsStreamFrame | null>(null)
   const imageDataUrlRef = useRef<string>('')
+
+  // Track last alert time per event (throttle: 3 seconds per event)
+  const lastAlertTimeRef = useRef<Record<string, number>>({})
 
   // Get latest image as data URL
   const getImageDataUrl = useCallback((): string => {
@@ -120,9 +147,37 @@ export function useNatsStream({
               latestFrameRef.current = data
               imageDataUrlRef.current = `data:image/jpeg;base64,${data.image}`
 
-              // Debug: log events
-              if ((data as any).events) {
-                console.log('NATS events:', (data as any).events)
+              // Process events and trigger alerts
+              if (data.events && onEventTriggered) {
+                try {
+                  const now = Date.now()
+                  Object.entries(data.events).forEach(([eventId, eventStatus]) => {
+                    // ROI: trigger on status 2
+                    // Line: trigger on status 1 (warning) or 2 (danger)
+                    const isRoi = eventId === 'roi'
+                    const shouldTrigger = isRoi
+                      ? eventStatus.status === 2
+                      : eventStatus.status >= 1
+
+                    if (shouldTrigger) {
+                      // Throttle: 3 seconds per event
+                      const lastTime = lastAlertTimeRef.current[eventId] || 0
+                      if (now - lastTime >= 3000) {
+                        lastAlertTimeRef.current[eventId] = now
+                        onEventTriggered({
+                          id: `${eventId}-${now}`,
+                          timestamp: data.timestamp,
+                          eventId,
+                          labels: eventStatus.labels,
+                          status: eventStatus.status,
+                          thumbnail: data.image,
+                        })
+                      }
+                    }
+                  })
+                } catch {
+                  // Ignore event processing errors
+                }
               }
 
               // Update state (throttled to avoid too many re-renders)
