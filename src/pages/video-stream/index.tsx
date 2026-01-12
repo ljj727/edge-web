@@ -1,12 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Video, AlertTriangle, X, Square, Tag, Percent, Activity, MapPin } from 'lucide-react'
-import { useCameras, useCameraStore, type CameraDisplaySettings } from '@features/camera'
+import { useEffect, useState } from 'react'
+import { Video, X, Square, Tag, Percent, Activity, MapPin } from 'lucide-react'
+import { useCameras, useCameraStore } from '@features/camera'
 import { CameraGrid } from '@widgets/camera-grid'
 import { cn } from '@shared/lib/cn'
-import type { EventAlert } from '@features/stream'
-
-const MAX_ALERTS = 5
-const ALERT_DURATION = 5000 // 5초 후 자동 삭제
 
 // 표시 설정 토글 옵션
 const DISPLAY_TOGGLES = [
@@ -27,27 +23,6 @@ export function VideoStreamPage() {
 
   // 표시 설정 팝업 상태
   const [settingsCameraId, setSettingsCameraId] = useState<string | null>(null)
-
-  // Event alerts state (max 5) - 각 알림에 생성 시간 포함
-  const [eventAlerts, setEventAlerts] = useState<(EventAlert & { createdAt: number })[]>([])
-
-  // Handle new event triggered - 새 이벤트가 오면 오래된 것 자동 제거
-  const handleEventTriggered = useCallback((alert: EventAlert) => {
-    setEventAlerts((prev) => {
-      const newAlerts = [{ ...alert, createdAt: Date.now() }, ...prev]
-      // Keep only MAX_ALERTS (오래된 것 자동 제거)
-      return newAlerts.slice(0, MAX_ALERTS)
-    })
-  }, [])
-
-  // 1초마다 5초 지난 알림 정리 (오래된 것부터 순차적으로)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now()
-      setEventAlerts((prev) => prev.filter((a) => now - a.createdAt < ALERT_DURATION))
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   // Auto-select first camera if none selected
   useEffect(() => {
@@ -124,97 +99,9 @@ export function VideoStreamPage() {
             selectedCameraIds={selectedCameraIds}
             onRemoveCamera={handleRemoveFromGrid}
             onReorderCameras={handleReorderCameras}
-            onEventTriggered={handleEventTriggered}
             onCameraSettings={(id) => setSettingsCameraId(id)}
             className="flex-1"
           />
-        )}
-
-        {/* Event Alert Panel */}
-        {eventAlerts.length > 0 && (
-          <div className="w-72 border-l border-gray-800 bg-gray-950 p-3 overflow-y-auto shrink-0">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-medium text-white">이벤트 알림</span>
-              <span className="text-xs text-gray-500">({eventAlerts.length})</span>
-            </div>
-            <div className="space-y-2">
-              {eventAlerts.map((alert) => {
-                const isLine = alert.eventId.startsWith('line-')
-                const isWarning = isLine && alert.status === 1
-                const isDanger = isLine && alert.status === 2
-
-                // 이벤트 타입별 스타일
-                const eventLabel = isLine
-                  ? alert.eventId === 'line-front' ? 'Line Front' : 'Line Side'
-                  : 'ROI 객체 감지'
-                const statusLabel = isLine
-                  ? isWarning ? 'WARNING' : 'DANGER'
-                  : ''
-                const dotColor = isLine
-                  ? isWarning ? 'bg-amber-500' : 'bg-red-500'
-                  : 'bg-red-500'
-                const borderColor = isLine
-                  ? isWarning ? 'border-amber-500/50' : 'border-red-500/50'
-                  : 'border-gray-800'
-                const labelBgColor = isLine
-                  ? isWarning ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
-                  : 'bg-amber-500/20 text-amber-400'
-
-                return (
-                  <div
-                    key={alert.id}
-                    className={cn(
-                      'bg-gray-900 rounded-lg overflow-hidden border',
-                      borderColor
-                    )}
-                  >
-                    {/* Thumbnail */}
-                    <div className="aspect-video bg-black">
-                      <img
-                        src={`data:image/jpeg;base64,${alert.thumbnail}`}
-                        alt="Event thumbnail"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    {/* Info */}
-                    <div className="p-2">
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className={cn('w-2 h-2 rounded-full animate-pulse', dotColor)} />
-                        <span className="text-xs font-medium text-white">{eventLabel}</span>
-                        {statusLabel && (
-                          <span className={cn(
-                            'ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded',
-                            isWarning ? 'bg-amber-500/30 text-amber-400' : 'bg-red-500/30 text-red-400'
-                          )}>
-                            {statusLabel}
-                          </span>
-                        )}
-                      </div>
-                      {alert.cameraName && (
-                        <p className="text-xs text-gray-400 mb-1">{alert.cameraName}</p>
-                      )}
-                      {alert.labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {alert.labels.map((label) => (
-                            <span
-                              key={label}
-                              className={cn('px-1.5 py-0.5 text-[10px] rounded', labelBgColor)}
-                            >
-                              {label}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        {new Date(alert.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
         )}
       </div>
 

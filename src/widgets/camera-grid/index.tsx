@@ -4,7 +4,6 @@ import { CameraView } from '@widgets/camera-view'
 import { cn } from '@shared/lib/cn'
 import { useCameraStore } from '@features/camera'
 import type { Camera } from '@shared/types'
-import type { EventAlert } from '@features/stream'
 
 interface CameraGridProps {
   cameras: Camera[]
@@ -12,7 +11,6 @@ interface CameraGridProps {
   onRemoveCamera?: (id: string) => void
   onCameraSettings?: (id: string) => void
   onReorderCameras?: (newOrder: string[]) => void
-  onEventTriggered?: (alert: EventAlert) => void
   className?: string
 }
 
@@ -22,7 +20,6 @@ export function CameraGrid({
   onRemoveCamera,
   onCameraSettings,
   onReorderCameras,
-  onEventTriggered,
   className,
 }: CameraGridProps) {
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
@@ -141,7 +138,6 @@ export function CameraGrid({
             onRemove={handleRemove}
             onMaximize={handleMaximize}
             onSettings={onCameraSettings}
-            onEventTriggered={onEventTriggered}
             displaySettings={getDisplaySettings(maximizedCamera.id)}
             className="max-h-full max-w-full"
           />
@@ -218,7 +214,6 @@ export function CameraGrid({
                     onRemove={handleRemove}
                     onMaximize={handleMaximize}
                     onSettings={onCameraSettings}
-                    onEventTriggered={onEventTriggered}
                     displaySettings={getDisplaySettings(camera.id)}
                     className="h-full w-full rounded-t-none"
                   />

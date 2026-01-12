@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { X, Maximize2, Settings } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
-import { useNatsStream, type Detection, type EventAlert } from '@features/stream'
+import { useNatsStream, type Detection } from '@features/stream'
 import { useInferencesByVideo } from '@features/inference'
 import type { CameraDisplaySettings } from '@features/camera'
 import type { Camera, CameraPlayerStatus } from '@shared/types'
@@ -45,7 +45,6 @@ interface CameraViewProps {
   onRemove?: (id: string) => void
   onMaximize?: (id: string) => void
   onSettings?: (id: string) => void
-  onEventTriggered?: (alert: EventAlert) => void
   displaySettings?: CameraDisplaySettings
   className?: string
   showControls?: boolean
@@ -56,7 +55,6 @@ export function CameraView({
   onRemove,
   onMaximize,
   onSettings,
-  onEventTriggered,
   displaySettings,
   className,
   showControls = true,
@@ -72,14 +70,6 @@ export function CameraView({
   const { data: inferences } = useInferencesByVideo(camera.id)
   const eventConfigs = inferences?.[0]?.settings?.configs || []
 
-  // Handle event with camera name
-  const handleEventTriggered = useCallback((alert: EventAlert) => {
-    onEventTriggered?.({
-      ...alert,
-      cameraName: camera.name,
-    })
-  }, [onEventTriggered, camera.name])
-
   // NATS stream hook
   const {
     isConnected,
@@ -92,7 +82,6 @@ export function CameraView({
     natsWsUrl: camera.nats_ws_url,
     natsSubject: camera.nats_subject,
     enabled: true,
-    onEventTriggered: handleEventTriggered,
   })
 
   // Update status based on connection
@@ -156,7 +145,7 @@ export function CameraView({
       const scaleX = canvas.width / width
       const scaleY = canvas.height / height
 
-      drawDetections(ctx, detections, scaleX, scaleY, 0, 0, displaySettings)
+      drawDetections(ctx, detections, scaleX, scaleY, 0, 0, canvas.width, canvas.height, displaySettings)
     }
 
     // Draw event settings (zones, lines) if enabled
@@ -189,6 +178,8 @@ export function CameraView({
     scaleY: number,
     offsetX: number = 0,
     offsetY: number = 0,
+    canvasWidth: number,
+    canvasHeight: number,
     settings?: CameraDisplaySettings
   ) => {
     const showBoundingBox = settings?.showBoundingBox !== false
@@ -237,6 +228,65 @@ export function CameraView({
         ctx.fillText(labelText, x + padding, y - padding - 2)
       }
 
+      // Draw keypoints as connected lines
+      if (showKeypoints && det.keypoints && det.keypoints.length > 0) {
+        try {
+          const kps = det.keypoints
+
+          // Draw lines connecting sequential keypoints
+          for (let i = 0; i < kps.length - 1; i++) {
+            const [x1, y1, conf1] = kps[i]
+            const [x2, y2, conf2] = kps[i + 1]
+
+            // Skip if either point has low confidence
+            if (conf1 < 0.3 || conf2 < 0.3) continue
+
+            const px1 = x1 * canvasWidth
+            const py1 = y1 * canvasHeight
+            const px2 = x2 * canvasWidth
+            const py2 = y2 * canvasHeight
+
+            // Line color based on average confidence
+            const avgConf = (conf1 + conf2) / 2
+            let lineColor = '#22c55e' // green
+            if (avgConf < 0.5) {
+              lineColor = '#ef4444' // red
+            } else if (avgConf < 0.7) {
+              lineColor = '#eab308' // yellow
+            }
+
+            ctx.beginPath()
+            ctx.moveTo(px1, py1)
+            ctx.lineTo(px2, py2)
+            ctx.strokeStyle = lineColor
+            ctx.lineWidth = 2
+            ctx.stroke()
+          }
+
+          // Draw points on top of lines
+          kps.forEach((kp) => {
+            const [kpX, kpY, kpConf] = kp
+            if (kpConf < 0.3) return
+
+            const px = kpX * canvasWidth
+            const py = kpY * canvasHeight
+
+            let kpColor = '#22c55e'
+            if (kpConf < 0.5) {
+              kpColor = '#ef4444'
+            } else if (kpConf < 0.7) {
+              kpColor = '#eab308'
+            }
+
+            ctx.beginPath()
+            ctx.arc(px, py, 4, 0, Math.PI * 2)
+            ctx.fillStyle = kpColor
+            ctx.fill()
+          })
+        } catch {
+          // Ignore keypoint drawing errors
+        }
+      }
     })
   }
 

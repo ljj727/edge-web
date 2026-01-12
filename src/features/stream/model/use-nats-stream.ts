@@ -19,27 +19,6 @@ export interface Detection {
   keypoints?: [number, number, number][] // [x, y, confidence] normalized 0-1
 }
 
-// Event status from detection
-// ROI: status 2 = triggered
-// Line: status 0 = safe, 1 = warning, 2 = danger
-export interface EventStatus {
-  labels: string[]
-  status: number
-}
-
-// Events map (eventSettingId -> status)
-export type EventsMap = Record<string, EventStatus>
-
-// Event alert for UI display
-export interface EventAlert {
-  id: string
-  timestamp: number
-  eventId: string // e.g., "roi-cam1"
-  labels: string[]
-  status: number
-  thumbnail: string // base64 image
-  cameraName?: string
-}
 
 // NATS stream frame data
 export interface NatsStreamFrame {
@@ -50,7 +29,6 @@ export interface NatsStreamFrame {
   width: number
   height: number
   detections: Detection[]
-  events?: EventsMap
   image: string // Base64 encoded JPEG
 }
 
@@ -58,7 +36,6 @@ interface UseNatsStreamOptions {
   natsWsUrl: string | null | undefined
   natsSubject: string | null | undefined
   enabled?: boolean
-  onEventTriggered?: (alert: EventAlert) => void
 }
 
 interface NatsStreamState {
@@ -73,7 +50,6 @@ export function useNatsStream({
   natsWsUrl,
   natsSubject,
   enabled = true,
-  onEventTriggered,
 }: UseNatsStreamOptions) {
   const [state, setState] = useState<NatsStreamState>({
     isConnected: false,
@@ -90,9 +66,6 @@ export function useNatsStream({
   // Store latest frame data
   const latestFrameRef = useRef<NatsStreamFrame | null>(null)
   const imageDataUrlRef = useRef<string>('')
-
-  // Track last alert time per event (throttle: 1 alert per second per event)
-  const lastAlertTimeRef = useRef<Record<string, number>>({})
 
   // Get latest image as data URL
   const getImageDataUrl = useCallback((): string => {
@@ -146,10 +119,6 @@ export function useNatsStream({
               // Update frame data
               latestFrameRef.current = data
               imageDataUrlRef.current = `data:image/jpeg;base64,${data.image}`
-
-              // Event alerts disabled for now
-              // TODO: Re-enable when needed
-              // if (data.events && onEventTriggered) { ... }
 
               // Update state (throttled to avoid too many re-renders)
               setState((prev) => ({
