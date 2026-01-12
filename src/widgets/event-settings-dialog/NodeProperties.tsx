@@ -24,6 +24,8 @@ const ALARM_TYPES_BY_SENSOR: Record<string, { type: string; label: string }[]> =
 }
 
 export function NodeProperties({ node, onUpdate, onDelete, appOutputs = [] }: NodePropertiesProps) {
+  // Debug: log appOutputs
+  console.log('[NodeProperties] appOutputs:', appOutputs)
 
   if (!node) {
     return (
@@ -355,7 +357,8 @@ function AlarmSensorSettings({ sensors, onUpdate }: AlarmSensorSettingsProps) {
       {sensors.map((config, index) => {
         const typeName = getTypeName(config.typeId)
         const availableSensors = getSensorsByType(config.typeId)
-        const alarmTypes = ALARM_TYPES_BY_SENSOR[typeName] || []
+        const _alarmTypes = ALARM_TYPES_BY_SENSOR[typeName] || []
+        void _alarmTypes // Reserved for future use
 
         return (
           <div key={index} className="border rounded p-3 space-y-3 bg-muted/30">

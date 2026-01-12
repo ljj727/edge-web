@@ -6,7 +6,7 @@ import { AuthGuard } from '../auth-guard'
 import { LoginPage } from '@pages/login'
 import { DashboardPage } from '@pages/dashboard'
 import { VideoStreamPage } from '@pages/video-stream'
-import { AnalyticsPage } from '@pages/analytics'
+import { CameraSettingsPage } from '@pages/camera-settings'
 import { SettingsPage } from '@pages/settings'
 import { StatisticsPage } from '@pages/statistics'
 import { SensorsPage } from '@pages/sensors'
@@ -41,8 +41,8 @@ export const router = createBrowserRouter([
         element: <VideoStreamPage />,
       },
       {
-        path: 'visionApp',
-        element: <AnalyticsPage />,
+        path: 'cameraSettings',
+        element: <CameraSettingsPage />,
       },
       {
         path: 'systemInfo',

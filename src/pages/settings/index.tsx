@@ -1,19 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@shared/ui'
+import { useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Card, CardContent, CardHeader, CardTitle, Button } from '@shared/ui'
 import {
-  Settings, Key, RefreshCw, Power, AlertTriangle, Radio,
-  CheckCircle, XCircle, RotateCcw, Loader2
+  Settings, RefreshCw, Power, AlertTriangle, Brain,
+  CheckCircle, XCircle, Loader2, Trash2, Plus
 } from 'lucide-react'
 import { dxApi } from '@features/dx'
-import { useMediaMTXSettings, useUpdateMediaMTXSettings, useResetMediaMTXSettings, useTestMediaMTXConnection } from '@features/mediamtx'
+import { useApps, useUploadApp, useDeleteApp } from '@features/app'
 import { useSystemRestart, type RestartStep } from '@features/system'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { cn } from '@shared/lib/cn'
 
 export function SettingsPage() {
-  const queryClient = useQueryClient()
-  const [licenseKey, setLicenseKey] = useState('')
-
   // System restart state
   const [restartSteps, setRestartSteps] = useState<RestartStep[]>([])
   const [isRestarting, setIsRestarting] = useState(false)
@@ -38,99 +36,46 @@ export function SettingsPage() {
     setIsRestarting(false)
   }
 
-  // MediaMTX state
-  const [mxForm, setMxForm] = useState({
-    host: 'localhost',
-    apiPort: '9997',
-    hlsPort: '8888',
-    webrtcPort: '8889',
-    rtspPort: '8554',
-    enabled: true,
-  })
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  // Vision Apps
+  const { data: apps, isLoading: appsLoading } = useApps()
+  const uploadApp = useUploadApp()
+  const deleteApp = useDeleteApp()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // MediaMTX hooks
-  const { data: mediamtxSettings, isLoading: mediamtxLoading } = useMediaMTXSettings()
-  const updateMediamtxMutation = useUpdateMediaMTXSettings()
-  const resetMediamtxMutation = useResetMediaMTXSettings()
-  const testMediamtxMutation = useTestMediaMTXConnection()
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
 
-  const parseUrl = (url: string, defaultPort: string) => {
-    try {
-      if (url.startsWith('rtsp://')) {
-        const match = url.match(/rtsp:\/\/([^:\/]+):?(\d+)?/)
-        return { host: match?.[1] || 'localhost', port: match?.[2] || defaultPort }
-      }
-      const parsed = new URL(url)
-      return { host: parsed.hostname, port: parsed.port || defaultPort }
-    } catch {
-      return { host: 'localhost', port: defaultPort }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      uploadApp.mutate(file)
+      e.target.value = ''
     }
   }
 
-  useEffect(() => {
-    if (mediamtxSettings) {
-      const api = parseUrl(mediamtxSettings.api_url, '9997')
-      const hls = parseUrl(mediamtxSettings.hls_url, '8888')
-      const webrtc = parseUrl(mediamtxSettings.webrtc_url, '8889')
-      const rtsp = parseUrl(mediamtxSettings.rtsp_url, '8554')
-
-      setMxForm({
-        host: api.host,
-        apiPort: api.port,
-        hlsPort: hls.port,
-        webrtcPort: webrtc.port,
-        rtspPort: rtsp.port,
-        enabled: mediamtxSettings.enabled,
-      })
-    }
-  }, [mediamtxSettings])
-
-  const buildUrls = () => ({
-    api_url: `http://${mxForm.host}:${mxForm.apiPort}/v3`,
-    hls_url: `http://${mxForm.host}:${mxForm.hlsPort}`,
-    webrtc_url: `http://${mxForm.host}:${mxForm.webrtcPort}`,
-    rtsp_url: `rtsp://${mxForm.host}:${mxForm.rtspPort}`,
-    enabled: mxForm.enabled,
-  })
-
-  const handleMediamtxSave = () => {
-    updateMediamtxMutation.mutate(buildUrls(), {
-      onSuccess: () => setTestResult(null),
-    })
+  const handleDeleteApp = (id: string) => {
+    deleteApp.mutate(id)
   }
 
-  const handleMediamtxReset = () => {
-    resetMediamtxMutation.mutate(undefined, {
-      onSuccess: () => setTestResult(null),
-    })
-  }
-
-  const handleMediamtxTest = async () => {
-    const result = await testMediamtxMutation.mutateAsync()
-    setTestResult(result)
-  }
-
+  // Device Info
   const { data: dx, isLoading: dxLoading } = useQuery({
     queryKey: ['dx'],
     queryFn: dxApi.getInfo,
   })
 
-  const { data: license, isLoading: licenseLoading } = useQuery({
-    queryKey: ['license'],
-    queryFn: dxApi.getLicense,
-  })
-
-  const activateLicenseMutation = useMutation({
-    mutationFn: (key: string) => dxApi.activateLicense(key),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['license'] })
-      setLicenseKey('')
-    },
-  })
-
   return (
-    <div className="h-full p-6">
+    <div className="h-full p-6 overflow-auto">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Settings className="h-8 w-8" />
+          Settings
+        </h1>
+        <p className="text-muted-foreground">
+          Manage system settings and vision apps
+        </p>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Device Information */}
         <Card>
@@ -180,189 +125,6 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* License */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              License
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {licenseLoading ? (
-              <div className="animate-pulse space-y-4">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-6 rounded bg-muted" />
-                ))}
-              </div>
-            ) : license ? (
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Type</span>
-                  <span className="capitalize">{license.type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status</span>
-                  <span className={`flex items-center gap-1 ${license.isValid ? 'text-green-600' : 'text-red-600'}`}>
-                    {license.isValid ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valid Until</span>
-                  <span>{new Date(license.endDate).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Max Streams</span>
-                  <span>{license.maxStreams}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Max Inferences</span>
-                  <span>{license.maxInferences}</span>
-                </div>
-                <div className="mt-6 border-t pt-4">
-                  <p className="mb-2 text-sm font-medium">Activate New License</p>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Enter license key"
-                      value={licenseKey}
-                      onChange={(e) => setLicenseKey(e.target.value)}
-                    />
-                    <Button
-                      onClick={() => activateLicenseMutation.mutate(licenseKey)}
-                      disabled={!licenseKey || activateLicenseMutation.isPending}
-                    >
-                      Activate
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-muted-foreground">No license activated</p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter license key"
-                    value={licenseKey}
-                    onChange={(e) => setLicenseKey(e.target.value)}
-                  />
-                  <Button
-                    onClick={() => activateLicenseMutation.mutate(licenseKey)}
-                    disabled={!licenseKey || activateLicenseMutation.isPending}
-                  >
-                    Activate
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* MX Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Radio className="h-5 w-5" />
-              MX
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {mediamtxLoading ? (
-              <div className="animate-pulse space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-10 rounded bg-muted" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Host / IP</label>
-                  <Input
-                    value={mxForm.host}
-                    onChange={(e) => setMxForm((prev) => ({ ...prev, host: e.target.value }))}
-                    placeholder="localhost"
-                  />
-                </div>
-                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">API</label>
-                    <Input
-                      value={mxForm.apiPort}
-                      onChange={(e) => setMxForm((prev) => ({ ...prev, apiPort: e.target.value }))}
-                      placeholder="9997"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">HLS</label>
-                    <Input
-                      value={mxForm.hlsPort}
-                      onChange={(e) => setMxForm((prev) => ({ ...prev, hlsPort: e.target.value }))}
-                      placeholder="8888"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">WebRTC</label>
-                    <Input
-                      value={mxForm.webrtcPort}
-                      onChange={(e) => setMxForm((prev) => ({ ...prev, webrtcPort: e.target.value }))}
-                      placeholder="8889"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">RTSP</label>
-                    <Input
-                      value={mxForm.rtspPort}
-                      onChange={(e) => setMxForm((prev) => ({ ...prev, rtspPort: e.target.value }))}
-                      placeholder="8554"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="mediamtx-enabled"
-                    checked={mxForm.enabled}
-                    onChange={(e) => setMxForm((prev) => ({ ...prev, enabled: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <label htmlFor="mediamtx-enabled" className="text-sm">
-                    Enable MX integration
-                  </label>
-                </div>
-                {testResult && (
-                  <div
-                    className={`flex items-center gap-2 rounded-md p-3 text-sm ${
-                      testResult.success
-                        ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                        : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                    }`}
-                  >
-                    {testResult.success ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                    {testResult.message}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button variant="outline" onClick={handleMediamtxTest} disabled={testMediamtxMutation.isPending}>
-                    {testMediamtxMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Radio className="mr-2 h-4 w-4" />
-                    )}
-                    Test Connection
-                  </Button>
-                  <Button variant="outline" onClick={handleMediamtxReset} disabled={resetMediamtxMutation.isPending}>
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Reset to Defaults
-                  </Button>
-                  <Button onClick={handleMediamtxSave} disabled={updateMediamtxMutation.isPending}>
-                    {updateMediamtxMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Save Settings
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* System Actions */}
         <Card>
           <CardHeader>
@@ -402,6 +164,78 @@ export function SettingsPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Vision Apps */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                Vision Apps
+              </CardTitle>
+              <Button onClick={handleUploadClick} disabled={uploadApp.isPending}>
+                {uploadApp.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                Upload App
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {appsLoading ? (
+              <div className="animate-pulse space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-12 rounded bg-muted" />
+                ))}
+              </div>
+            ) : apps && apps.length > 0 ? (
+              <div className="space-y-2">
+                {apps.map((app) => (
+                  <div
+                    key={app.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
+                        <Brain className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{app.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {app.id}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeleteApp(app.id)}
+                      disabled={deleteApp.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <Brain className="h-12 w-12 mb-2" />
+                <p>No vision apps installed</p>
+                <p className="text-sm">Upload a .zip file to add a vision app</p>
               </div>
             )}
           </CardContent>

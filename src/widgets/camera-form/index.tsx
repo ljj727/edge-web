@@ -2,28 +2,24 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { X, Camera, Loader2 } from 'lucide-react'
-import { Button, Input } from '@shared/ui'
+import { X, Camera, Loader2, Plus } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
 import type { CameraCreate } from '@shared/types'
 
 const cameraSchema = z.object({
   id: z
     .string()
-    .min(1, 'Camera ID is required')
-    .max(50, 'Camera ID must be less than 50 characters')
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, underscores and hyphens'),
+    .min(1, 'ID를 입력하세요')
+    .max(50, 'ID는 50자 이하로 입력하세요')
+    .regex(/^[a-zA-Z0-9_-]+$/, '영문, 숫자, _, - 만 사용 가능'),
   name: z
     .string()
-    .min(1, 'Camera name is required')
-    .max(100, 'Camera name must be less than 100 characters'),
+    .min(1, '이름을 입력하세요')
+    .max(100, '이름은 100자 이하로 입력하세요'),
   rtsp_url: z
     .string()
-    .min(1, 'RTSP URL is required')
-    .regex(
-      /^rtsp:\/\/.+/,
-      'Must be a valid RTSP URL (rtsp://...)'
-    ),
+    .min(1, 'RTSP URL을 입력하세요')
+    .regex(/^rtsp:\/\/.+/, 'rtsp:// 로 시작해야 합니다'),
 })
 
 type CameraFormData = z.infer<typeof cameraSchema>
@@ -61,27 +57,22 @@ export function CameraForm({
       setError(null)
       await onSubmit(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add camera')
+      setError(err instanceof Error ? err.message : '카메라 등록 실패')
     }
   }
 
   return (
-    <div className={cn('bg-card rounded-lg border p-6', className)}>
-      <div className="flex items-center justify-between mb-6">
+    <div className={cn('bg-gray-900 rounded-xl border border-gray-800 p-5', className)}>
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Camera className="w-5 h-5 text-primary" />
+          <div className="p-2 bg-gray-800 rounded-lg">
+            <Camera className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold">Add Camera</h2>
-            <p className="text-sm text-muted-foreground">
-              Register a new IP camera stream
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-white">카메라 등록</h2>
         </div>
         <button
           onClick={onCancel}
-          className="text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -89,87 +80,87 @@ export function CameraForm({
 
       <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
         {/* Camera ID */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Camera ID <span className="text-red-500">*</span>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-300">
+            카메라 ID <span className="text-red-400">*</span>
           </label>
-          <Input
+          <input
             {...register('id')}
             placeholder="cam1"
             disabled={isLoading}
+            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all disabled:opacity-50"
           />
           {errors.id && (
-            <p className="text-sm text-red-500">{errors.id.message}</p>
+            <p className="text-xs text-red-400">{errors.id.message}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            Unique identifier for the camera (letters, numbers, underscores, hyphens)
-          </p>
         </div>
 
         {/* Camera Name */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Camera Name <span className="text-red-500">*</span>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-300">
+            이름 <span className="text-red-400">*</span>
           </label>
-          <Input
+          <input
             {...register('name')}
-            placeholder="Front Door Camera"
+            placeholder="현관 카메라"
             disabled={isLoading}
+            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all disabled:opacity-50"
           />
           {errors.name && (
-            <p className="text-sm text-red-500">{errors.name.message}</p>
+            <p className="text-xs text-red-400">{errors.name.message}</p>
           )}
         </div>
 
         {/* RTSP URL */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            RTSP URL <span className="text-red-500">*</span>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-300">
+            RTSP URL <span className="text-red-400">*</span>
           </label>
-          <Input
+          <input
             {...register('rtsp_url')}
             placeholder="rtsp://admin:password@192.168.1.100:554/stream"
             disabled={isLoading}
+            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white font-mono text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all disabled:opacity-50"
           />
           {errors.rtsp_url && (
-            <p className="text-sm text-red-500">{errors.rtsp_url.message}</p>
+            <p className="text-xs text-red-400">{errors.rtsp_url.message}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            RTSP stream URL from your IP camera
-          </p>
         </div>
 
         {/* Error message */}
         {error && (
-          <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-lg text-sm">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm">
             {error}
           </div>
         )}
 
         {/* Buttons */}
-        <div className="flex gap-3 pt-2">
-          <Button
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-white font-medium transition-all disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
             type="submit"
             disabled={isLoading}
-            className="flex-1"
+            className="flex-1 px-4 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-gray-900 font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Adding...
+                <Loader2 className="w-4 h-4 animate-spin" />
+                등록 중...
               </>
             ) : (
-              'Add Camera'
+              <>
+                <Plus className="w-4 h-4" />
+                등록
+              </>
             )}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
+          </button>
         </div>
       </form>
     </div>

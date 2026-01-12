@@ -8,6 +8,8 @@ export interface CameraDisplaySettings {
   showLabel: boolean
   showTrackId: boolean
   showScore: boolean
+  showKeypoints: boolean
+  showEventSettings: boolean
 }
 
 export const defaultDisplaySettings: CameraDisplaySettings = {
@@ -15,6 +17,8 @@ export const defaultDisplaySettings: CameraDisplaySettings = {
   showLabel: true,
   showTrackId: false,
   showScore: false,
+  showKeypoints: true,
+  showEventSettings: false,
 }
 
 interface CameraState {

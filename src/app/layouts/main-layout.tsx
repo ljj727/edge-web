@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Video,
-  Brain,
+  Camera,
   Settings,
   BarChart3,
   LogOut,
@@ -15,7 +15,7 @@ import { useAuthStore, useLogout } from '@features/auth'
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/videoStream', icon: Video, label: 'Video Stream' },
-  { to: '/visionApp', icon: Brain, label: 'Vision Apps' },
+  { to: '/cameraSettings', icon: Camera, label: 'Camera Settings' },
   { to: '/statistics', icon: BarChart3, label: 'Statistics' },
   { to: '/sensors', icon: Bell, label: 'Sensors' },
   { to: '/systemInfo', icon: Settings, label: 'Settings' },

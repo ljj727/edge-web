@@ -1,7 +1,8 @@
 // Event types for inference pipeline
 // Must match compositor expected types (case sensitive!)
 export type EventType =
-  | 'RoI'        // Region of Interest (zone)
+  | 'RoI'        // Region of Interest (zone) - v1 format
+  | 'ROI'        // Region of Interest (zone) - v2 format
   | 'Line'       // Line crossing
   | 'And'        // Logical AND
   | 'Or'         // Logical OR
@@ -19,9 +20,15 @@ export type DetectionPointType =
   | 'leftBottom' | 'centerBottom' | 'rightBottom'
   | 'ALL'
 
+// v1 style target (multiple labels)
 export interface EventTarget {
   labels: string[]
   classifiers?: Record<string, string[]>
+}
+
+// v2 style target (single label)
+export interface EventTargetV2 {
+  label: string
 }
 
 export interface EventSetting {
@@ -33,8 +40,11 @@ export interface EventSetting {
   // Geometry - normalized coordinates (0~1)
   points?: [number, number][]
 
-  // Target
-  target?: EventTarget
+  // Target (v1 style - single target with multiple labels)
+  target?: EventTarget | EventTargetV2
+
+  // Targets (v2 style - multiple targets for ROI)
+  targets?: EventTargetV2[]
 
   // Timing
   timeout?: number
@@ -45,6 +55,10 @@ export interface EventSetting {
   direction?: DirectionType
   inOrder?: boolean // For And events
   turn?: number // For Speed (0 or 1)
+
+  // v2 Line properties
+  keypoints?: number[]       // [1], [2,3] etc - keypoint indices to detect
+  warningDistance?: number   // 0.0 ~ 1.0 normalized distance for WARNING zone
 
   // Other
   detectionPoint?: DetectionPointType

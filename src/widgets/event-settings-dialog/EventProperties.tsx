@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@shared/ui'
 import { X } from 'lucide-react'
-import type { EventSetting, DirectionType, DetectionPointType } from '@shared/types'
+import type { EventSetting, DirectionType, DetectionPointType, EventTarget, EventTargetV2 } from '@shared/types'
 import { EVENT_TYPE_INFO, DETECTION_POINTS, DIRECTION_OPTIONS, requiresGeometry, isContainerType } from './types'
 
 interface EventPropertiesProps {
@@ -11,6 +11,14 @@ interface EventPropertiesProps {
 
 // Common labels for object detection
 const COMMON_LABELS = ['person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'dog', 'cat']
+
+// Helper to get labels from target (handles both v1 and v2 formats)
+function getTargetLabels(target?: EventTarget | EventTargetV2): string[] {
+  if (!target) return []
+  if ('labels' in target) return target.labels
+  if ('label' in target) return [target.label]
+  return []
+}
 
 export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
   const [newLabel, setNewLabel] = useState('')
@@ -31,11 +39,10 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
 
   const handleAddLabel = (label: string) => {
     if (!label.trim()) return
-    const currentLabels = event.target?.labels || []
+    const currentLabels = getTargetLabels(event.target)
     if (!currentLabels.includes(label)) {
       handleUpdate({
         target: {
-          ...event.target,
           labels: [...currentLabels, label],
         },
       })
@@ -44,11 +51,10 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
   }
 
   const handleRemoveLabel = (label: string) => {
-    const currentLabels = event.target?.labels || []
+    const currentLabels = getTargetLabels(event.target)
     handleUpdate({
       target: {
-        ...event.target,
-        labels: currentLabels.filter((l) => l !== label),
+        labels: currentLabels.filter((l: string) => l !== label),
       },
     })
   }
@@ -89,10 +95,10 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
         </Section>
 
         {/* Target - for RoI, Line, Enter-Exit */}
-        {['RoI', 'Line', 'Enter-Exit'].includes(event.eventType) && (
+        {['RoI', 'ROI', 'Line', 'Enter-Exit'].includes(event.eventType) && (
           <Section title="Target Labels">
             <div className="flex flex-wrap gap-1 mb-2">
-              {(event.target?.labels || []).map((label) => (
+              {getTargetLabels(event.target).map((label) => (
                 <span
                   key={label}
                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/20 text-primary text-xs rounded"
@@ -118,7 +124,7 @@ export function EventProperties({ event, onUpdate }: EventPropertiesProps) {
               </Button>
             </div>
             <div className="flex flex-wrap gap-1">
-              {COMMON_LABELS.filter((l) => !event.target?.labels?.includes(l)).map((label) => (
+              {COMMON_LABELS.filter((l) => !getTargetLabels(event.target).includes(l)).map((label) => (
                 <button
                   key={label}
                   className="px-2 py-0.5 text-xs border rounded hover:bg-muted/50"

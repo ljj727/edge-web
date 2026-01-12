@@ -50,6 +50,7 @@ export function generateEventId(): string {
 // Event type display info (must match EventType union)
 export const EVENT_TYPE_INFO: Record<EventType, { label: string; color: string; icon: string }> = {
   'RoI': { label: 'ROI Zone', color: '#22c55e', icon: '🔲' },
+  'ROI': { label: 'ROI Zone (v2)', color: '#22c55e', icon: '🔲' },
   'Line': { label: 'Line', color: '#3b82f6', icon: '📏' },
   'And': { label: 'AND', color: '#a855f7', icon: '⊓' },
   'Or': { label: 'OR', color: '#f97316', icon: '⊔' },

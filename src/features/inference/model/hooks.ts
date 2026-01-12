@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useInferenceStore } from './store'
 import { inferenceApi } from '../api/inference-api'
 import type { CreateInferenceRequest } from '../api/inference-api'
-import type { Inference, InferenceSettings } from '@shared/types'
+import type { InferenceSettings } from '@shared/types'
 
 const QUERY_KEYS = {
   inferences: ['inferences'] as const,
@@ -76,27 +76,6 @@ export function useCreateInference() {
   })
 }
 
-export function useUpdateInference() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({
-      appId,
-      videoId,
-      data,
-    }: {
-      appId: string
-      videoId: string
-      data: Partial<Inference>
-    }) => inferenceApi.update(appId, videoId, data),
-    onSuccess: (_, { videoId }) => {
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.inferencesByVideo(videoId),
-      })
-    },
-  })
-}
-
 export function useDeleteInference() {
   const queryClient = useQueryClient()
 
@@ -105,6 +84,30 @@ export function useDeleteInference() {
       inferenceApi.delete(appId, videoId),
     onSuccess: (_, { videoId }) => {
       // Invalidate both general and video-specific queries
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inferences })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inferencesByVideo(videoId) })
+    },
+  })
+}
+
+export function useUpdateInference() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      appId,
+      videoId,
+      newAppId,
+      uri,
+      name,
+    }: {
+      appId: string
+      videoId: string
+      newAppId: string
+      uri?: string
+      name?: string
+    }) => inferenceApi.update(appId, videoId, { newAppId, uri, name }),
+    onSuccess: (_, { videoId }) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inferences })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inferencesByVideo(videoId) })
     },

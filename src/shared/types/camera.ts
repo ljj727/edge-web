@@ -11,6 +11,9 @@ export interface Camera {
   updated_at?: string | null
   hls_url?: string | null
   webrtc_url?: string | null
+  // NATS streaming
+  nats_subject?: string | null
+  nats_ws_url?: string | null
 }
 
 export interface CameraCreate {

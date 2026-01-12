@@ -40,8 +40,11 @@ export function InferenceSettingDialog({
   useEffect(() => {
     if (inference?.nodeSettings) {
       try {
-        const parsed = JSON.parse(inference.nodeSettings)
-        setGraphData(parsed)
+        // nodeSettings can be string or object
+        const parsed = typeof inference.nodeSettings === 'string'
+          ? JSON.parse(inference.nodeSettings)
+          : inference.nodeSettings
+        setGraphData(parsed as GraphData)
       } catch (e) {
         console.error('Failed to parse node settings:', e)
       }

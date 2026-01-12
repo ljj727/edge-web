@@ -24,17 +24,21 @@ export const inferenceApi = {
   create: (data: CreateInferenceRequest) =>
     api.post<Inference>(endpoints.inference, data),
 
-  // Update inference
-  update: (appId: string, videoId: string, data: Partial<Inference>) =>
-    api.put<Inference>(
-      `${endpoints.inference}?appId=${appId}&videoId=${videoId}`,
-      data
-    ),
-
   // Delete inference (also stops it)
   delete: (appId: string, videoId: string) =>
     api.delete<void>(
       `${endpoints.inference}?appId=${appId}&videoId=${videoId}`
+    ),
+
+  // Update/replace inference (change connected app)
+  update: (
+    appId: string,
+    videoId: string,
+    data: { newAppId: string; uri?: string; name?: string }
+  ) =>
+    api.put<Inference>(
+      `${endpoints.inference}?appId=${appId}&videoId=${videoId}`,
+      data
     ),
 
   // Update event settings (graph configuration)

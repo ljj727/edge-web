@@ -45,7 +45,7 @@ export interface License {
   isValid: boolean
 }
 
-export interface Sensor {
+export interface DeviceSensor {
   id: string
   name: string
   type: 'input' | 'output'

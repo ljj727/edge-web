@@ -228,6 +228,9 @@ export function EventSettingsDialog({
     enabled: isOpen && !!app?.id,
   })
 
+  // Debug: log appDetails
+  console.log('[EventSettings] appDetails:', appDetails)
+
   // Load preview image
   useEffect(() => {
     if (!isOpen || !app?.id || !cameraId) return
