@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui'
-import { Activity, Cpu, HardDrive, Video, Brain, PlayCircle, StopCircle, AlertCircle } from 'lucide-react'
+import { Activity, Cpu, HardDrive, Video, Brain, PlayCircle, StopCircle, AlertCircle, Trash2 } from 'lucide-react'
 import { metricsApi } from '@features/metrics'
-import { useInferences, useInferenceStatuses } from '@features/inference'
+import { useInferences, useInferenceStatuses, useDeleteInference } from '@features/inference'
 import { useCameras } from '@features/camera'
 import { useApps } from '@features/app'
 import { cn } from '@shared/lib/cn'
@@ -17,12 +18,16 @@ function formatBytes(bytes: number): string {
 }
 
 const statusConfig: Record<InferenceStatusType, { label: string; color: string; icon: typeof PlayCircle }> = {
+  starting: { label: 'Starting', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: PlayCircle },
   running: { label: 'Running', color: 'text-green-600 bg-green-50 border-green-200', icon: PlayCircle },
   stopped: { label: 'Stopped', color: 'text-gray-600 bg-gray-50 border-gray-200', icon: StopCircle },
   error: { label: 'Error', color: 'text-red-600 bg-red-50 border-red-200', icon: AlertCircle },
+  reconnecting: { label: 'Reconnecting', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: AlertCircle },
 }
 
 export function DashboardPage() {
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ['metrics'],
     queryFn: metricsApi.getCurrent,
@@ -33,6 +38,23 @@ export function DashboardPage() {
   const { data: statuses } = useInferenceStatuses()
   const { data: cameras } = useCameras()
   const { data: apps } = useApps()
+  const deleteInference = useDeleteInference()
+
+  const handleDelete = (appId: string, videoId: string) => {
+    const key = `${appId}-${videoId}`
+    if (deletingId === key) {
+      // Confirm delete
+      deleteInference.mutate({ appId, videoId }, {
+        onSuccess: () => setDeletingId(null),
+        onError: () => setDeletingId(null),
+      })
+    } else {
+      // First click - show confirmation
+      setDeletingId(key)
+      // Auto-reset after 3 seconds
+      setTimeout(() => setDeletingId((prev) => prev === key ? null : prev), 3000)
+    }
+  }
 
   // Create status map for quick lookup (convert backend int codes to frontend status types)
   const statusMap = new Map<string, InferenceStatusType>()
@@ -40,8 +62,8 @@ export function DashboardPage() {
     statusMap.set(`${s.appId}-${s.videoId}`, getInferenceStatusType(s))
   })
 
-  // Count running inferences (status=3 means CONNECTED/running)
-  const runningCount = statuses?.filter((s) => s.status === 3).length ?? 0
+  // Count running inferences (status=1 means RUNNING)
+  const runningCount = statuses?.filter((s) => s.status === 1).length ?? 0
 
   return (
     <div className="p-6">
@@ -146,6 +168,7 @@ export function DashboardPage() {
                     <th className="text-left py-3 px-4 font-medium">App</th>
                     <th className="text-left py-3 px-4 font-medium">Type</th>
                     <th className="text-left py-3 px-4 font-medium">Status</th>
+                    <th className="text-left py-3 px-4 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -180,6 +203,21 @@ export function DashboardPage() {
                             <StatusIcon className="h-3.5 w-3.5" />
                             {config.label}
                           </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <button
+                            onClick={() => handleDelete(inference.appId, inference.videoId)}
+                            disabled={deleteInference.isPending}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors',
+                              deletingId === `${inference.appId}-${inference.videoId}`
+                                ? 'bg-red-600 text-white hover:bg-red-700'
+                                : 'text-red-600 hover:bg-red-50 border border-red-200'
+                            )}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingId === `${inference.appId}-${inference.videoId}` ? 'Confirm?' : 'Delete'}
+                          </button>
                         </td>
                       </tr>
                     )

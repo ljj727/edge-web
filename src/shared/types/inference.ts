@@ -112,14 +112,14 @@ export interface StreamResponse {
 }
 
 // Inference status from GET /api/v2/inference/status
-// Backend returns: NG=0, READY=1, CONNECTING=2, CONNECTED=3
-export type InferenceStatusCode = 0 | 1 | 2 | 3
-export type InferenceStatusType = 'running' | 'stopped' | 'error'
+// Backend returns: STARTING=0, RUNNING=1, STOPPED=2, ERROR=3, RECONNECTING=4
+export type InferenceStatusCode = 0 | 1 | 2 | 3 | 4
+export type InferenceStatusType = 'starting' | 'running' | 'stopped' | 'error' | 'reconnecting'
 
 export interface InferenceStatusResponse {
   appId: string
   videoId: string
-  status: InferenceStatusCode // Backend returns int: 0=NG, 1=READY, 2=CONNECTING, 3=CONNECTED
+  status: InferenceStatusCode // Backend: 0=STARTING, 1=RUNNING, 2=STOPPED, 3=ERROR, 4=RECONNECTING
   count: number
   eos: boolean
   err: boolean
@@ -128,8 +128,14 @@ export interface InferenceStatusResponse {
 // Helper to convert backend status code to frontend status type
 export function getInferenceStatusType(response: InferenceStatusResponse): InferenceStatusType {
   if (response.err) return 'error'
-  if (response.status === 3) return 'running' // CONNECTED
-  return 'stopped' // NG, READY, CONNECTING
+  switch (response.status) {
+    case 0: return 'starting'      // STARTING
+    case 1: return 'running'       // RUNNING
+    case 2: return 'stopped'       // STOPPED
+    case 3: return 'error'         // ERROR
+    case 4: return 'reconnecting'  // RECONNECTING
+    default: return 'stopped'
+  }
 }
 
 export interface InferenceStatus {

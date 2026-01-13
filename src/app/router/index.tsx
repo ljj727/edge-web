@@ -7,9 +7,10 @@ import { LoginPage } from '@pages/login'
 import { DashboardPage } from '@pages/dashboard'
 import { VideoStreamPage } from '@pages/video-stream'
 import { CameraSettingsPage } from '@pages/camera-settings'
+import { AiSettingsPage } from '@pages/ai-settings'
 import { SettingsPage } from '@pages/settings'
 import { StatisticsPage } from '@pages/statistics'
-import { SensorsPage } from '@pages/sensors'
+import { PlcPage } from '@pages/plc'
 
 export const router = createBrowserRouter([
   {
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
         element: <CameraSettingsPage />,
       },
       {
+        path: 'aiSettings',
+        element: <AiSettingsPage />,
+      },
+      {
         path: 'systemInfo',
         element: <SettingsPage />,
       },
@@ -53,8 +58,8 @@ export const router = createBrowserRouter([
         element: <StatisticsPage />,
       },
       {
-        path: 'sensors',
-        element: <SensorsPage />,
+        path: 'plc',
+        element: <PlcPage />,
       },
     ],
   },

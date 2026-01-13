@@ -55,10 +55,6 @@ export function VideoStreamPage() {
     }
   }, [cameras, selectedCameraIds.length, setSelectedCameraIds])
 
-  const handleRemoveFromGrid = (id: string) => {
-    setSelectedCameraIds(selectedCameraIds.filter((cid) => cid !== id))
-  }
-
   const handleReorderCameras = (newOrder: string[]) => {
     setSelectedCameraIds(newOrder)
   }
@@ -121,7 +117,6 @@ export function VideoStreamPage() {
           <CameraGrid
             cameras={cameras || []}
             selectedCameraIds={selectedCameraIds}
-            onRemoveCamera={handleRemoveFromGrid}
             onReorderCameras={handleReorderCameras}
             onCameraSettings={(id) => setSettingsCameraId(id)}
             onEventTriggered={handleEventTriggered}
@@ -131,11 +126,11 @@ export function VideoStreamPage() {
 
         {/* Event Alert Panel */}
         {eventAlerts.length > 0 && (
-          <div className="w-72 border-l border-gray-800 bg-gray-950 p-3 overflow-y-auto shrink-0">
+          <div className="w-72 border-l bg-muted/30 p-3 overflow-y-auto shrink-0">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-medium text-white">이벤트 알림</span>
-              <span className="text-xs text-gray-500">({eventAlerts.length})</span>
+              <span className="text-sm font-medium">이벤트 알림</span>
+              <span className="text-xs text-muted-foreground">({eventAlerts.length})</span>
             </div>
             <div className="space-y-2">
               {eventAlerts.map((alert) => {
@@ -157,19 +152,19 @@ export function VideoStreamPage() {
                   ? isWarning ? 'bg-amber-500' : 'bg-red-500'
                   : 'bg-red-500'
                 const borderColor = isLine
-                  ? isWarning ? 'border-amber-500/50' : 'border-red-500/50'
-                  : 'border-red-500/50'
+                  ? isWarning ? 'border-amber-400' : 'border-red-400'
+                  : 'border-red-400'
 
                 return (
                   <div
                     key={alert.id}
                     className={cn(
-                      'bg-gray-900 rounded-lg overflow-hidden border',
+                      'bg-card rounded-lg overflow-hidden border shadow-sm',
                       borderColor
                     )}
                   >
                     {/* Thumbnail */}
-                    <div className="aspect-video bg-black">
+                    <div className="aspect-video bg-muted">
                       <img
                         src={`data:image/jpeg;base64,${alert.thumbnail}`}
                         alt="Event thumbnail"
@@ -180,32 +175,32 @@ export function VideoStreamPage() {
                     <div className="p-2">
                       <div className="flex items-center gap-1 mb-1">
                         <span className={cn('w-2 h-2 rounded-full animate-pulse', dotColor)} />
-                        <span className="text-xs font-medium text-white">{eventLabel}</span>
+                        <span className="text-xs font-medium">{eventLabel}</span>
                         {statusLabel && (
                           <span className={cn(
                             'ml-auto px-1.5 py-0.5 text-[10px] font-bold rounded',
-                            isWarning ? 'bg-amber-500/30 text-amber-400' : 'bg-red-500/30 text-red-400'
+                            isWarning ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'
                           )}>
                             {statusLabel}
                           </span>
                         )}
                       </div>
                       {alert.cameraName && (
-                        <p className="text-xs text-gray-400 mb-1">{alert.cameraName}</p>
+                        <p className="text-xs text-muted-foreground mb-1">{alert.cameraName}</p>
                       )}
                       {alert.labels.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {alert.labels.map((label, idx) => (
                             <span
                               key={idx}
-                              className="px-1.5 py-0.5 text-[10px] rounded bg-gray-700 text-gray-300"
+                              className="px-1.5 py-0.5 text-[10px] rounded bg-muted text-muted-foreground"
                             >
                               {label}
                             </span>
                           ))}
                         </div>
                       )}
-                      <p className="text-[10px] text-gray-500 mt-1">
+                      <p className="text-[10px] text-muted-foreground mt-1">
                         {new Date(alert.timestamp).toLocaleTimeString()}
                       </p>
                     </div>
@@ -220,18 +215,18 @@ export function VideoStreamPage() {
       {/* Display Settings Popup */}
       {settingsCameraId && (
         <div
-          className="absolute inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/30"
           onClick={() => setSettingsCameraId(null)}
         >
           <div
-            className="bg-gray-900 rounded-lg border border-gray-700 p-4 w-72 shadow-xl"
+            className="bg-card rounded-lg border p-4 w-72 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-white">표시 설정</h3>
+              <h3 className="text-sm font-medium">표시 설정</h3>
               <button
                 onClick={() => setSettingsCameraId(null)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -253,8 +248,8 @@ export function VideoStreamPage() {
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
                       isEnabled
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     )}
                   >
                     <Icon className="w-4 h-4" />
@@ -263,12 +258,12 @@ export function VideoStreamPage() {
                       <div
                         className={cn(
                           'w-8 h-4 rounded-full transition-colors relative',
-                          isEnabled ? 'bg-blue-500' : 'bg-gray-600'
+                          isEnabled ? 'bg-blue-500' : 'bg-gray-300'
                         )}
                       >
                         <div
                           className={cn(
-                            'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform',
+                            'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
                             isEnabled ? 'translate-x-4' : 'translate-x-0.5'
                           )}
                         />

@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Video, GripHorizontal } from 'lucide-react'
+import { useState, useRef, useCallback } from 'react'
+import { Video } from 'lucide-react'
 import { CameraView } from '@widgets/camera-view'
 import { cn } from '@shared/lib/cn'
 import { useCameraStore } from '@features/camera'
@@ -9,7 +9,6 @@ import type { EventAlert } from '@features/stream'
 interface CameraGridProps {
   cameras: Camera[]
   selectedCameraIds: string[]
-  onRemoveCamera?: (id: string) => void
   onCameraSettings?: (id: string) => void
   onReorderCameras?: (newOrder: string[]) => void
   onEventTriggered?: (alert: EventAlert) => void
@@ -19,34 +18,36 @@ interface CameraGridProps {
 export function CameraGrid({
   cameras,
   selectedCameraIds,
-  onRemoveCamera,
   onCameraSettings,
   onReorderCameras,
   onEventTriggered,
   className,
 }: CameraGridProps) {
-  const [maximizedId, setMaximizedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   // dropIndex: the index where the dragged item will be inserted
   const [dropIndex, setDropIndex] = useState<number | null>(null)
   const dropIndexRef = useRef<number | null>(null)
   const getDisplaySettings = useCameraStore((state) => state.getDisplaySettings)
 
+  // Track playing status for each camera
+  const [playingCameras, setPlayingCameras] = useState<Set<string>>(new Set())
+
+  const handleStatusChange = useCallback((cameraId: string, isPlaying: boolean) => {
+    setPlayingCameras((prev) => {
+      const next = new Set(prev)
+      if (isPlaying) {
+        next.add(cameraId)
+      } else {
+        next.delete(cameraId)
+      }
+      return next
+    })
+  }, [])
+
   // Get selected cameras in order
   const selectedCameras = selectedCameraIds
     .map((id) => cameras.find((c) => c.id === id))
     .filter((c): c is Camera => c !== undefined)
-
-  const handleMaximize = (id: string) => {
-    setMaximizedId(maximizedId === id ? null : id)
-  }
-
-  const handleRemove = (id: string) => {
-    if (maximizedId === id) {
-      setMaximizedId(null)
-    }
-    onRemoveCamera?.(id)
-  }
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, cameraId: string) => {
@@ -130,42 +131,24 @@ export function CameraGrid({
     }
   }
 
-  // If a camera is maximized, show only that one
-  if (maximizedId) {
-    const maximizedCamera = selectedCameras.find((c) => c.id === maximizedId)
-    if (maximizedCamera) {
-      return (
-        <div className={cn('h-full min-h-0 p-2 bg-gray-900 flex items-center justify-center', className)}>
-          <CameraView
-            camera={maximizedCamera}
-            onRemove={handleRemove}
-            onMaximize={handleMaximize}
-            onSettings={onCameraSettings}
-            onEventTriggered={onEventTriggered}
-            displaySettings={getDisplaySettings(maximizedCamera.id)}
-            className="h-full max-w-full"
-          />
-        </div>
-      )
-    }
-  }
-
-  // Minimum height for the grid
-  const minGridHeight = 300
-
   return (
-    <div className={cn('h-full p-2 bg-gray-900', className)} style={{ minHeight: minGridHeight }}>
+    <div className={cn('h-full bg-muted/30', className)}>
       {selectedCameras.length === 0 ? (
         // Empty state
-        <div className="h-full flex flex-col items-center justify-center text-gray-500">
+        <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
           <Video className="w-16 h-16 mb-4" />
           <p className="text-lg font-medium mb-2">No Cameras Selected</p>
           <p className="text-sm">Select cameras from above</p>
         </div>
       ) : (
-        // Horizontal layout for portrait videos: cam1 | cam2 | cam3 | cam4
+        // Card layout for cameras - grid for 4, row for 1-3
         <div
-          className="h-full flex flex-row items-center justify-center gap-2 px-2"
+          className={cn(
+            'h-full p-3 gap-3',
+            selectedCameras.length <= 3
+              ? 'flex flex-row items-center justify-center'
+              : 'grid grid-cols-2 grid-rows-2 place-items-center'
+          )}
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
           onDragLeave={handleDragLeave}
@@ -174,59 +157,66 @@ export function CameraGrid({
             const isDragging = draggedId === camera.id
             const showIndicator = dropIndex === index
             const showEndIndicator = index === selectedCameras.length - 1 && dropIndex === selectedCameras.length
+            const isPlaying = playingCameras.has(camera.id)
 
             return (
               <div
                 key={camera.id}
                 className={cn(
-                  'relative h-full min-h-0 flex flex-col items-center justify-center',
+                  'relative h-full max-h-full',
                   isDragging && 'opacity-30'
                 )}
+                style={{ aspectRatio: '9/16' }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  // Determine if dropping on left or right half
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const midX = rect.left + rect.width / 2
+                  if (e.clientX < midX) {
+                    handleDragOver(e, index)
+                  } else {
+                    handleDragOver(e, index + 1)
+                  }
+                }}
               >
-                {/* Drop zone - left side (only active during drag) */}
-                {draggedId && (
-                  <div
-                    className="absolute left-0 top-0 bottom-0 w-1/2 z-40"
-                    onDragOver={(e) => handleDragOver(e, index)}
-                  />
-                )}
-
-                {/* Drop zone - right side (only active during drag) */}
-                {draggedId && (
-                  <div
-                    className="absolute right-0 top-0 bottom-0 w-1/2 z-40"
-                    onDragOver={(e) => handleDragOver(e, index + 1)}
-                  />
-                )}
-
                 {/* Left drop indicator */}
                 {showIndicator && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 -translate-x-2 rounded-full z-50 shadow-[0_0_12px_3px_rgba(59,130,246,0.6)]" />
                 )}
 
-                {/* Camera container with drag handle */}
-                <div className="h-full flex flex-col items-center">
-                  {/* Drag Handle Bar */}
-                  <div
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, camera.id)}
-                    onDragEnd={handleDragEnd}
-                    className="w-full h-6 bg-gray-700 hover:bg-gray-600 rounded-t-lg flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 z-50"
-                    style={{ maxWidth: 'inherit' }}
-                  >
-                    <GripHorizontal className="w-4 h-4 text-gray-400" />
+                {/* Camera Card */}
+                <div
+                  className="h-full w-full flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden cursor-grab active:cursor-grabbing"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, camera.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
+                    <span className="font-semibold text-sm">{camera.name}</span>
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 text-xs font-medium rounded-full',
+                        isPlaying
+                          ? 'bg-green-100 text-green-600'
+                          : 'bg-gray-100 text-gray-500'
+                      )}
+                    >
+                      {isPlaying ? 'ON' : 'OFF'}
+                    </span>
                   </div>
 
-                  {/* Camera View - takes remaining height */}
-                  <CameraView
-                    camera={camera}
-                    onRemove={handleRemove}
-                    onMaximize={handleMaximize}
-                    onSettings={onCameraSettings}
-                    onEventTriggered={onEventTriggered}
-                    displaySettings={getDisplaySettings(camera.id)}
-                    className="flex-1 min-h-0 rounded-t-none"
-                  />
+                  {/* Camera View */}
+                  <div className="flex-1 min-h-0 p-2">
+                    <CameraView
+                      camera={camera}
+                      onSettings={onCameraSettings}
+                      onEventTriggered={onEventTriggered}
+                      onStatusChange={handleStatusChange}
+                      displaySettings={getDisplaySettings(camera.id)}
+                      className="w-full h-full"
+                    />
+                  </div>
                 </div>
 
                 {/* Right drop indicator (for last item) */}

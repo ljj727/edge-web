@@ -5,7 +5,6 @@ import {
   Settings, RefreshCw, Power, AlertTriangle, Brain,
   CheckCircle, XCircle, Loader2, Trash2, Plus
 } from 'lucide-react'
-import { dxApi } from '@features/dx'
 import { useApps, useUploadApp, useDeleteApp } from '@features/app'
 import { useSystemRestart, type RestartStep } from '@features/system'
 import { useState } from 'react'
@@ -58,12 +57,6 @@ export function SettingsPage() {
     deleteApp.mutate(id)
   }
 
-  // Device Info
-  const { data: dx, isLoading: dxLoading } = useQuery({
-    queryKey: ['dx'],
-    queryFn: dxApi.getInfo,
-  })
-
   return (
     <div className="h-full p-6 overflow-auto">
       <div className="mb-6">
@@ -77,54 +70,6 @@ export function SettingsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Device Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Device Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {dxLoading ? (
-              <div className="animate-pulse space-y-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-6 rounded bg-muted" />
-                ))}
-              </div>
-            ) : dx ? (
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Device ID</span>
-                  <span className="font-mono">{dx.dx_id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Name</span>
-                  <span>{dx.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Address</span>
-                  <span>{dx.address}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Version</span>
-                  <span>{dx.version}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Framework</span>
-                  <span>{dx.framework}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Capacity</span>
-                  <span>{dx.capacity} streams</span>
-                </div>
-              </div>
-            ) : (
-              <p>No device information available</p>
-            )}
-          </CardContent>
-        </Card>
-
         {/* System Actions */}
         <Card>
           <CardHeader>

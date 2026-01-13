@@ -7,7 +7,8 @@ import {
   BarChart3,
   LogOut,
   User,
-  Bell,
+  Cpu,
+  Brain,
 } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
 import { useAuthStore, useLogout } from '@features/auth'
@@ -16,8 +17,9 @@ const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/videoStream', icon: Video, label: 'Video Stream' },
   { to: '/cameraSettings', icon: Camera, label: 'Camera Settings' },
+  { to: '/aiSettings', icon: Brain, label: 'AI Settings' },
   { to: '/statistics', icon: BarChart3, label: 'Statistics' },
-  { to: '/sensors', icon: Bell, label: 'Sensors' },
+  { to: '/plc', icon: Cpu, label: 'PLC' },
   { to: '/systemInfo', icon: Settings, label: 'Settings' },
 ]
 

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { X, Maximize2, Settings } from 'lucide-react'
+import { Settings, Video, Wifi, WifiOff } from 'lucide-react'
 import { cn } from '@shared/lib/cn'
 import { useNatsStream, type Detection, type EventAlert } from '@features/stream'
 import { useInferencesByVideo } from '@features/inference'
@@ -42,10 +42,9 @@ const getClassColor = (className: string): string => {
 
 interface CameraViewProps {
   camera: Camera
-  onRemove?: (id: string) => void
-  onMaximize?: (id: string) => void
   onSettings?: (id: string) => void
   onEventTriggered?: (alert: EventAlert) => void
+  onStatusChange?: (cameraId: string, isPlaying: boolean) => void
   displaySettings?: CameraDisplaySettings
   className?: string
   showControls?: boolean
@@ -53,10 +52,9 @@ interface CameraViewProps {
 
 export function CameraView({
   camera,
-  onRemove,
-  onMaximize,
   onSettings,
   onEventTriggered,
+  onStatusChange,
   displaySettings,
   className,
   showControls = true,
@@ -65,7 +63,7 @@ export function CameraView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<CameraPlayerStatus>('loading')
-  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9) // default 16:9
+  const [aspectRatio, setAspectRatio] = useState<number>(9 / 16) // default 9:16 (portrait)
   const animationFrameRef = useRef<number | null>(null)
 
   // Fetch event settings for this camera
@@ -95,18 +93,25 @@ export function CameraView({
     onEventTriggered: handleEventTriggered,
   })
 
-  // Update status based on connection
+  // Update status based on connection and actual frame reception
   useEffect(() => {
     if (error) {
       setStatus('error')
-    } else if (isConnected) {
+    } else if (isConnected && fps > 0) {
       setStatus('playing')
     } else if (!camera.nats_ws_url || !camera.nats_subject) {
       setStatus('offline')
+    } else if (isConnected) {
+      setStatus('loading') // Connected but no frames yet
     } else {
       setStatus('loading')
     }
-  }, [isConnected, error, camera.nats_ws_url, camera.nats_subject])
+  }, [isConnected, error, fps, camera.nats_ws_url, camera.nats_subject])
+
+  // Notify parent of status changes
+  useEffect(() => {
+    onStatusChange?.(camera.id, status === 'playing')
+  }, [status, camera.id, onStatusChange])
 
   // Update image and draw detections
   const updateFrame = useCallback(() => {
@@ -415,7 +420,8 @@ export function CameraView({
     <div
       ref={containerRef}
       className={cn(
-        'relative bg-black rounded-lg overflow-hidden group',
+        'relative rounded-lg overflow-hidden group',
+        status === 'playing' ? 'bg-black' : 'bg-muted',
         className
       )}
       style={{
@@ -424,63 +430,36 @@ export function CameraView({
         minHeight,
       }}
     >
-      {/* Status indicator */}
-      <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
-        <span
-          className={cn(
-            'w-2 h-2 rounded-full animate-pulse',
-            statusColors[status]
+      {/* Status indicator - only show when playing */}
+      {status === 'playing' && (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+          <span
+            className={cn(
+              'w-2 h-2 rounded-full animate-pulse',
+              statusColors[status]
+            )}
+          />
+          <span className="text-white text-xs bg-black/60 px-2 py-1 rounded">
+            {camera.name}
+          </span>
+          {fps > 0 && (
+            <span className="text-white text-xs bg-black/60 px-2 py-1 rounded">
+              {fps.toFixed(1)} FPS
+            </span>
           )}
-        />
-        <span className="text-white text-xs bg-black/60 px-2 py-1 rounded">
-          {camera.name}
-        </span>
-        {status === 'playing' && fps > 0 && (
-          <span className="text-white text-xs bg-black/60 px-2 py-1 rounded">
-            {fps.toFixed(1)} FPS
-          </span>
-        )}
-        {status !== 'playing' && (
-          <span className="text-white text-xs bg-black/60 px-2 py-1 rounded">
-            {statusLabels[status]}
-          </span>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Controls */}
-      {showControls && (
-        <div className="absolute top-2 right-2 z-10 flex gap-1">
-          {/* Settings button - always visible */}
-          {onSettings && (
-            <button
-              onClick={() => onSettings(camera.id)}
-              className="bg-black/60 text-white p-1.5 rounded hover:bg-black/80 transition-colors"
-              title="Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          )}
-          {/* Other controls - visible on hover */}
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onMaximize && (
-              <button
-                onClick={() => onMaximize(camera.id)}
-                className="bg-black/60 text-white p-1.5 rounded hover:bg-black/80 transition-colors"
-                title="Maximize"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-            )}
-            {onRemove && (
-              <button
-                onClick={() => onRemove(camera.id)}
-                className="bg-red-500/80 text-white p-1.5 rounded hover:bg-red-600 transition-colors"
-                title="Remove"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+      {/* Settings - only show on hover when playing */}
+      {showControls && status === 'playing' && onSettings && (
+        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onSettings(camera.id)}
+            className="bg-black/60 text-white p-1.5 rounded hover:bg-black/80 transition-colors"
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -497,42 +476,27 @@ export function CameraView({
         className="hidden"
       />
 
-      {/* Loading overlay */}
-      {status === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            <span className="text-white text-sm">Connecting...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Error/Offline overlay */}
-      {(status === 'error' || status === 'offline') && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-          <div className="flex flex-col items-center gap-2 text-center px-4">
-            <div
-              className={cn(
-                'w-12 h-12 rounded-full flex items-center justify-center',
-                status === 'error' ? 'bg-red-500/20' : 'bg-gray-500/20'
-              )}
-            >
-              <X
-                className={cn(
-                  'w-6 h-6',
-                  status === 'error' ? 'text-red-500' : 'text-gray-500'
-                )}
-              />
-            </div>
-            <span className="text-white text-sm font-medium">
-              {status === 'error' ? 'Connection Error' : 'Camera Offline'}
-            </span>
-            <span className="text-gray-400 text-xs">
-              {status === 'error'
-                ? 'Failed to connect to stream'
-                : 'No NATS stream configured'}
-            </span>
-          </div>
+      {/* Non-playing states */}
+      {status !== 'playing' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+          {status === 'loading' && (
+            <>
+              <Wifi className="w-10 h-10 mb-2 animate-pulse" />
+              <p className="text-sm">연결 중...</p>
+            </>
+          )}
+          {status === 'error' && (
+            <>
+              <WifiOff className="w-10 h-10 mb-2 text-red-400" />
+              <p className="text-sm">연결 오류</p>
+            </>
+          )}
+          {status === 'offline' && (
+            <>
+              <Video className="w-10 h-10 mb-2" />
+              <p className="text-sm">스트림 미설정</p>
+            </>
+          )}
         </div>
       )}
     </div>
