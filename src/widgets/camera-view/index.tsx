@@ -405,13 +405,6 @@ export function CameraView({
     offline: 'bg-gray-500',
   }
 
-  const statusLabels: Record<CameraPlayerStatus, string> = {
-    loading: 'Connecting...',
-    playing: 'Live',
-    error: 'Connection Error',
-    offline: 'Offline',
-  }
-
   // Small fixed minimum size - allows shrinking for multiple cameras
   const minWidth = 150
   const minHeight = minWidth / aspectRatio

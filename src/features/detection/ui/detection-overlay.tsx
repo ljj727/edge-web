@@ -15,6 +15,7 @@ const defaultSettings: CameraDisplaySettings = {
   showTrackId: false,
   showScore: false,
   showKeypoints: false,
+  showEventSettings: false,
 }
 
 const LABEL_COLORS: Record<string, string> = {

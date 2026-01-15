@@ -4,9 +4,6 @@ import type {
   PlcSettingsRequest,
   PlcCameraSettingsRequest,
   PlcConnectionCreate,
-  PlcConnectionUpdate,
-  PlcAddressCreate,
-  PlcAddressUpdate,
   PlcEventMappingCreate,
   PlcEventMappingUpdate,
   PlcEventConfigCreate,
@@ -196,53 +193,6 @@ export function usePlcConnectionStatus() {
     queryKey: PLC_QUERY_KEYS.connectionStatus,
     queryFn: plcApi.getConnectionStatus,
     refetchInterval: 5000,
-  })
-}
-
-// =============================================================================
-// Address Hooks
-// =============================================================================
-
-export function usePlcAddresses(connectionId?: string) {
-  return useQuery({
-    queryKey: PLC_QUERY_KEYS.addresses(connectionId),
-    queryFn: () => plcApi.getAddresses(connectionId),
-    staleTime: 30000,
-  })
-}
-
-export function useCreatePlcAddress() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: PlcAddressCreate) => plcApi.createAddress(data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['plc', 'addresses'] })
-    },
-  })
-}
-
-export function useUpdatePlcAddress() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: PlcAddressUpdate }) =>
-      plcApi.updateAddress(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plc', 'addresses'] })
-    },
-  })
-}
-
-export function useDeletePlcAddress() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (id: string) => plcApi.deleteAddress(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plc', 'addresses'] })
-      queryClient.invalidateQueries({ queryKey: ['plc', 'mappings'] })
-    },
   })
 }
 

@@ -1,5 +1,8 @@
+// Runtime config from window.__CONFIG__ (set in public/config.js)
+const runtimeConfig = (window as any).__CONFIG__ || {}
+
 export const API_CONFIG = {
-  baseURL: '/api',
+  baseURL: runtimeConfig.API_URL || '/api',
   timeout: 10000,
   endpoints: {
     // Inference

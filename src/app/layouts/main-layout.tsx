@@ -32,11 +32,8 @@ export function MainLayout() {
       {/* Top Navigation Bar */}
       <header className="h-14 border-b bg-card flex items-center px-6 shrink-0">
         {/* Logo */}
-        <div className="flex items-center gap-2 mr-8">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">DX</span>
-          </div>
-          <h1 className="text-lg font-semibold">Edge DX</h1>
+        <div className="mr-8">
+          <img src="/logo.png" alt="HALLIM" className="h-8" />
         </div>
 
         {/* Navigation */}

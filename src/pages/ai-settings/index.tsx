@@ -274,12 +274,12 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
           if (zoneConfig.targets && zoneConfig.targets.length > 0) {
             const firstTarget = zoneConfig.targets[0]
             if (typeof firstTarget === 'string') {
-              setZoneTargets(zoneConfig.targets)
+              setZoneTargets(zoneConfig.targets as unknown as string[])
             } else if (firstTarget && typeof firstTarget === 'object' && 'label' in firstTarget) {
               setZoneTargets(zoneConfig.targets.map((t: any) => t.label))
             }
-          } else if (zoneConfig.target && 'labels' in zoneConfig.target) {
-            setZoneTargets(zoneConfig.target.labels)
+          } else if (zoneConfig.target && 'labels' in (zoneConfig.target as any)) {
+            setZoneTargets((zoneConfig.target as any).labels)
           }
         }
 
@@ -834,7 +834,7 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
                 )}
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {elements.map(({ id, label, color, points, hasPoints }) => {
+                {elements.map(({ id, color, points, hasPoints }) => {
                   const isActive = activeElement === id
                   return (
                     <button
@@ -905,7 +905,7 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             {/* Zone Settings */}
             {activeElement === 'zone' && (() => {
               const selectedApp = apps.find(a => a.id === connectedAppId)
-              const availableLabels = selectedApp?.models?.[0]?.labels || []
+              const availableLabels = selectedApp?.outputs?.map(o => o.label) || []
               const isAllSelected = zoneTargets.includes('ALL')
 
               return (
@@ -1137,7 +1137,7 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
 
   // PLC data
   const { data: rawCameraSettings } = usePlcCameraSettings(cameraId)
-  const { data: rawEvents, refetch } = usePlcCameraEvents(cameraId)
+  const { data: rawEvents } = usePlcCameraEvents(cameraId)
   const { data: availableEventsData } = usePlcAvailableEvents(cameraId)
   const updateEvent = useUpdatePlcCameraEvent()
 
