@@ -4,14 +4,12 @@ import { CameraView } from '@widgets/camera-view'
 import { cn } from '@shared/lib/cn'
 import { useCameraStore } from '@features/camera'
 import type { Camera } from '@shared/types'
-import type { EventAlert } from '@features/stream'
 
 interface CameraGridProps {
   cameras: Camera[]
   selectedCameraIds: string[]
   onCameraSettings?: (id: string) => void
   onReorderCameras?: (newOrder: string[]) => void
-  onEventTriggered?: (alert: EventAlert) => void
   className?: string
 }
 
@@ -20,7 +18,6 @@ export function CameraGrid({
   selectedCameraIds,
   onCameraSettings,
   onReorderCameras,
-  onEventTriggered,
   className,
 }: CameraGridProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -211,7 +208,6 @@ export function CameraGrid({
                     <CameraView
                       camera={camera}
                       onSettings={onCameraSettings}
-                      onEventTriggered={onEventTriggered}
                       onStatusChange={handleStatusChange}
                       displaySettings={getDisplaySettings(camera.id)}
                       className="w-full h-full"
