@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: edge-frontend:latest
+    container_name: edge-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.js:/app/dist/config.js
+    restart: unless-stopped
