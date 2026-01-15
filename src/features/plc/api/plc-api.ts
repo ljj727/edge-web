@@ -71,6 +71,13 @@ export const plcApi = {
     api.post<PlcEventConfig[]>(`${ENDPOINT}/cameras/${cameraId}/events/seed`),
 
   // ==========================================================================
+  // Camera Available Events (카메라별 사용 가능한 이벤트 목록)
+  // ==========================================================================
+
+  getAvailableEvents: (cameraId: string) =>
+    api.get<{ events: string[] }>(`${ENDPOINT}/cameras/${cameraId}/available-events`),
+
+  // ==========================================================================
   // Camera Send (카메라별 수동 전송)
   // ==========================================================================
 

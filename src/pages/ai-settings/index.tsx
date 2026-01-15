@@ -1,14 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Camera, RefreshCw, Video, Save,
-  RotateCcw, Layers,
+  RotateCcw, Layers, Maximize2, X, ZoomIn, ZoomOut, Settings2,
   Car, Truck, Bus, Bike, User, Dog, Cat, CircleDot, type LucideIcon, Brain
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { connect, StringCodec } from 'nats.ws'
 import type { NatsConnection } from 'nats.ws'
 import { useCameras, useSyncCameras } from '@features/camera'
 import { useApps } from '@features/app'
-import { useInferencesByVideo, useCreateInference, useDeleteInference, useUpdateEventSettings } from '@features/inference'
+import { useInferencesByVideo, useUpdateEventSettings } from '@features/inference'
+import {
+  usePlcCameraSettings,
+  usePlcCameraEvents,
+  useUpdatePlcCameraEvent,
+  usePlcAvailableEvents,
+} from '@features/plc'
 import { cn } from '@shared/lib/cn'
 import type { Camera as CameraType, App } from '@shared/types'
 
@@ -190,8 +197,13 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
 
-  // App connection loading state
-  const [connectingAppId, setConnectingAppId] = useState<string | null>(null)
+  // Resizer state
+  const [previewWidth, setPreviewWidth] = useState(50) // percentage
+  const [isResizing, setIsResizing] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // PLC section expand state
+  const [plcExpanded, setPlcExpanded] = useState(false)
 
   // Detection elements - Zone (ROI)
   const [zone, setZone] = useState<[number, number][]>([])
@@ -221,8 +233,6 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
 
   // Hooks
   const { data: inferences } = useInferencesByVideo(camera.id)
-  const createInference = useCreateInference()
-  const deleteInference = useDeleteInference()
   const updateEventSettings = useUpdateEventSettings()
 
   // Current connected app
@@ -554,38 +564,35 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
     }
   }
 
-  // Handle Vision App card click - toggle inference connection
-  const handleAppToggle = async (appId: string) => {
-    setConnectingAppId(appId)
-    setToast(null)
-    try {
-      if (connectedAppId === appId) {
-        // Already connected to this app - disconnect (delete inference)
-        await deleteInference.mutateAsync({ appId, videoId: camera.id })
-        setToast({ type: 'success', message: 'Vision App 연결이 해제되었습니다' })
-      } else {
-        // Not connected - create new inference
-        // If another app is connected, delete it first
-        if (connectedInference) {
-          await deleteInference.mutateAsync({ appId: connectedInference.appId, videoId: camera.id })
-        }
-        const app = apps.find(a => a.id === appId)
-        await createInference.mutateAsync({
-          appId,
-          videoId: camera.id,
-          uri: camera.rtsp_url,
-          name: `${app?.name || appId} - ${camera.name}`,
-          settings: { version: '1.0', configs: [] },
-        })
-        setToast({ type: 'success', message: 'Vision App이 연결되었습니다' })
-      }
-    } catch (err) {
-      setToast({ type: 'error', message: '연결 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류') })
-    } finally {
-      setConnectingAppId(null)
-      setTimeout(() => setToast(null), 3000)
+  // Resizer handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const percentage = (x / rect.width) * 100
+      // Limit between 25% and 75%
+      setPreviewWidth(Math.max(25, Math.min(75, percentage)))
     }
-  }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing])
 
   // Save event settings only (zones, lines) - v2.0 format
   const handleSaveEvent = async () => {
@@ -699,9 +706,12 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden p-6">
-        <div className="h-full grid grid-cols-2 gap-6">
+        <div ref={containerRef} className="h-full flex gap-0 relative">
           {/* Left Column - Preview */}
-          <div className="flex items-start justify-center h-full overflow-hidden">
+          <div
+            className="flex items-start justify-center h-full overflow-hidden pr-2"
+            style={{ width: `${previewWidth}%` }}
+          >
             <div
               className="relative bg-black rounded-xl overflow-hidden"
               style={{
@@ -739,39 +749,43 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             </div>
           </div>
 
+          {/* Resize Handle */}
+          <div
+            onMouseDown={handleResizeStart}
+            className={cn(
+              'w-2 cursor-col-resize flex items-center justify-center group shrink-0 z-10',
+              isResizing && 'bg-primary/10'
+            )}
+          >
+            <div className={cn(
+              'w-1 h-16 rounded-full bg-border transition-colors',
+              'group-hover:bg-primary/50',
+              isResizing && 'bg-primary'
+            )} />
+          </div>
+
           {/* Right Column - All Settings */}
-          <div className="overflow-y-auto space-y-4">
-            {/* Vision App */}
+          <div
+            className="overflow-y-auto space-y-4 pl-2"
+            style={{ width: `${100 - previewWidth}%` }}
+          >
+            {/* Vision App (Read-only - 카메라 설정에서 변경) */}
             <div>
               <h3 className="text-xs font-medium text-muted-foreground mb-2">Vision App</h3>
-              {apps.length === 0 ? (
-                <p className="text-xs text-muted-foreground">등록된 Vision App이 없습니다</p>
+              {connectedAppId ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-300 rounded-lg">
+                  <Layers className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">
+                    {apps.find(a => a.id === connectedAppId)?.name || connectedAppId}
+                  </span>
+                </div>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {apps.map((app) => {
-                    const isConnected = connectedAppId === app.id
-                    const isLoading = connectingAppId === app.id
-                    return (
-                      <button
-                        key={app.id}
-                        onClick={() => handleAppToggle(app.id)}
-                        disabled={isLoading}
-                        className={cn(
-                          'px-2.5 py-1.5 rounded-md border transition-all flex items-center gap-1.5 text-xs',
-                          isConnected
-                            ? 'bg-green-50 border-green-500 text-green-600'
-                            : 'bg-muted border hover:border-primary/50'
-                        )}
-                      >
-                        {isLoading ? (
-                          <RefreshCw className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Layers className="h-3 w-3" />
-                        )}
-                        {app.name}
-                      </button>
-                    )
-                  })}
+                <div className="px-3 py-2 bg-muted border rounded-lg">
+                  <p className="text-xs text-muted-foreground">
+                    연결된 Vision App이 없습니다.
+                    <br />
+                    <span className="text-[10px]">카메라 설정에서 Vision App을 연결해주세요.</span>
+                  </p>
                 </div>
               )}
             </div>
@@ -1018,9 +1032,476 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
                 </div>
               </div>
             )}
+
+            {/* PLC Event Settings */}
+            <PlcEventSettingsSection
+              cameraId={camera.id}
+              isExpanded={plcExpanded}
+              onToggleExpand={() => setPlcExpanded(!plcExpanded)}
+            />
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+// =============================================================================
+// PLC Event Settings Section
+// =============================================================================
+
+// 비트 범위 (0 ~ F, 16진수)
+const BIT_RANGE = Array.from({ length: 16 }, (_, i) => i)
+const BIT_HEX = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
+
+// 동적 주소 범위 생성
+function generateAddressRange(baseAddress: string, wordCount: number): string[] {
+  const match = baseAddress.match(/D0*(\d+)/)
+  if (!match) return []
+  const baseNum = parseInt(match[1], 10)
+  const addresses: string[] = []
+  for (let i = 0; i < wordCount; i++) {
+    addresses.push(`D${String(baseNum + i).padStart(7, '0')}`)
+  }
+  return addresses
+}
+
+// PLC 이벤트 라벨 한글 매핑 (화면에는 한글, API에는 영어)
+const PLC_EVENT_LABELS: Record<string, string> = {
+  'RV': 'RV',
+  'General': '승용차',
+  'Pickup': '픽업트럭',
+  'Mirror_on': '미러 열림',
+  'Mirror_off': '미러 닫힘',
+  'Opened_door': '문 열림',
+  'Carrier': '캐리어',
+  'Roof_box': '루프박스',
+  'Shark_antenna': '샤크안테나',
+  'Pole_antenna': '폴안테나',
+  'Warning_light': '경고등',
+  'Emblem': '엠블럼',
+  'Taxi_light': '택시등',
+  'Person': '사람',
+  'approach-line-front': '전방 접근',
+  'crossing-line-front': '전방 이탈',
+  'approach-line-side': '측면 접근',
+  'crossing-line-side': '측면 이탈',
+}
+
+// 영어 이벤트 타입을 한글 라벨로 변환
+function getKoreanLabel(eventType: string): string {
+  return PLC_EVENT_LABELS[eventType] || eventType
+}
+
+// 라벨별 색상
+const LABEL_COLOR_PALETTE = [
+  'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500',
+  'bg-orange-500', 'bg-red-500', 'bg-pink-500', 'bg-cyan-500',
+  'bg-teal-500', 'bg-indigo-500', 'bg-rose-500', 'bg-amber-500',
+]
+
+function getLabelColor(label: string): string {
+  let hash = 0
+  for (let i = 0; i < label.length; i++) {
+    hash = label.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return LABEL_COLOR_PALETTE[Math.abs(hash) % LABEL_COLOR_PALETTE.length]
+}
+
+// cameraSettings 정규화
+function normalizeCameraSettings(settings: any) {
+  if (!settings) return null
+  return {
+    baseAddress: settings.base_address || settings.baseAddress || '',
+    wordCount: settings.word_count ?? settings.wordCount ?? 0,
+  }
+}
+
+// event 정규화
+function normalizeEvent(event: any) {
+  return {
+    eventType: event.eventType || event.event_type || '',
+    label: event.label || '',
+    address: event.address || '',
+    bit: event.bit,
+    enabled: event.enabled ?? true,
+  }
+}
+
+interface PlcEventSettingsSectionProps {
+  cameraId: string
+  isExpanded: boolean
+  onToggleExpand: () => void
+}
+
+function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEventSettingsSectionProps) {
+  const navigate = useNavigate()
+  const [draggedLabel, setDraggedLabel] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ address: string; bit: number } | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [cellSize, setCellSize] = useState(100) // 모달 셀 너비 (px)
+
+  // PLC data
+  const { data: rawCameraSettings } = usePlcCameraSettings(cameraId)
+  const { data: rawEvents, refetch } = usePlcCameraEvents(cameraId)
+  const { data: availableEventsData } = usePlcAvailableEvents(cameraId)
+  const updateEvent = useUpdatePlcCameraEvent()
+
+  // Normalize data
+  const cameraSettings = useMemo(() => normalizeCameraSettings(rawCameraSettings), [rawCameraSettings])
+  const events = useMemo(() => rawEvents?.map(normalizeEvent) || [], [rawEvents])
+
+  // Address range
+  const addressRange = useMemo(() => {
+    if (!cameraSettings?.baseAddress || !cameraSettings?.wordCount) return []
+    return generateAddressRange(cameraSettings.baseAddress, cameraSettings.wordCount)
+  }, [cameraSettings?.baseAddress, cameraSettings?.wordCount])
+
+  // Available events from API
+  const availableLabels = availableEventsData?.events || []
+
+  // Unplaced labels
+  const unplacedLabels = useMemo(() => {
+    const placedEventTypes = events.filter(e => e.bit !== null).map(e => e.eventType)
+    return availableLabels.filter(label => !placedEventTypes.includes(label))
+  }, [availableLabels, events])
+
+  // Get event at position
+  const getEventAt = (address: string, bit: number) => {
+    return events.find(e => e.address === address && e.bit === bit)
+  }
+
+  // Drag handlers
+  const handleDragStart = (e: React.DragEvent, label: string) => {
+    setDraggedLabel(label)
+    e.dataTransfer.setData('text/plain', label)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedLabel(null)
+    setDropTarget(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, address: string, bit: number) => {
+    e.preventDefault()
+    setDropTarget({ address, bit })
+  }
+
+  const handleDragLeave = () => {
+    setDropTarget(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, address: string, bit: number) => {
+    e.preventDefault()
+    const label = e.dataTransfer.getData('text/plain')
+    if (!label) return
+
+    setDropTarget(null)
+    setDraggedLabel(null)
+    setSaveStatus('saving')
+
+    try {
+      await updateEvent.mutateAsync({
+        cameraId,
+        eventType: label,
+        data: { address, bit, label },
+      })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 1500)
+    } catch {
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    }
+  }
+
+  const handleRemoveFromCell = async (label: string) => {
+    setSaveStatus('saving')
+    try {
+      await updateEvent.mutateAsync({
+        cameraId,
+        eventType: label,
+        data: { bit: null },
+      })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 1500)
+    } catch {
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    }
+  }
+
+  // No PLC settings
+  if (!cameraSettings || addressRange.length === 0) {
+    return (
+      <div className="mt-4 pt-4 border-t">
+        <h3 className="text-xs font-medium text-muted-foreground mb-2">PLC 이벤트 설정</h3>
+        <div className="p-3 bg-muted rounded-lg text-center">
+          <p className="text-xs text-muted-foreground">
+            PLC 설정이 없습니다.
+            <br />
+            <span className="text-[10px]">PLC 페이지에서 설정을 먼저 완료해주세요.</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // 인라인 셀 크기 (너비 넓게, 높이는 적당히)
+  const inlineCellWidth = 72
+  const inlineCellHeight = 32
+
+  // 그리드 렌더링 함수 (인라인과 모달에서 공유)
+  const renderGrid = (inModal: boolean) => {
+    const cellWidth = inModal ? cellSize : inlineCellWidth
+    const cellHeight = inModal ? cellSize * 0.4 : inlineCellHeight // 모달은 높이를 너비의 40%로
+    const fontSize = inModal ? Math.max(12, cellSize / 6) : 12
+    const labelFontSize = inModal ? Math.max(11, cellSize / 8) : 11
+
+    return (
+      <div className={cn(
+        'overflow-x-auto',
+        inModal && 'overflow-y-auto flex-1'
+      )}>
+        <table className="border-collapse" style={{ fontSize: `${fontSize}px` }}>
+          <thead className="sticky top-0 bg-zinc-700 text-zinc-300 z-10">
+            <tr>
+              <th
+                className="text-left font-medium border-r border-zinc-600 sticky left-0 bg-zinc-700 z-20"
+                style={{ padding: inModal ? '8px 12px' : '6px 10px', minWidth: inModal ? '80px' : '64px' }}
+              >
+                ADDR
+              </th>
+              {BIT_RANGE.map(bit => (
+                <th
+                  key={bit}
+                  className="text-center font-medium border-r border-zinc-600"
+                  style={{
+                    padding: inModal ? '8px 4px' : '6px 4px',
+                    width: `${cellWidth}px`,
+                    minWidth: `${cellWidth}px`
+                  }}
+                >
+                  {BIT_HEX[bit]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {addressRange.map((address) => (
+              <tr key={address} className="border-b border-zinc-200">
+                <td
+                  className="font-mono bg-zinc-100 border-r sticky left-0 z-10"
+                  style={{ padding: inModal ? '4px 12px' : '4px 10px', fontSize: inModal ? `${fontSize - 1}px` : '10px' }}
+                >
+                  {address.replace('D000', 'D')}
+                </td>
+                {BIT_RANGE.map(bit => {
+                  const event = getEventAt(address, bit)
+                  const isDropTargetCell = dropTarget?.address === address && dropTarget?.bit === bit
+
+                  return (
+                    <td
+                      key={bit}
+                      onDragOver={(e) => handleDragOver(e, address, bit)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, address, bit)}
+                      className={cn(
+                        'text-center border-r border-zinc-200',
+                        isDropTargetCell && 'bg-primary/30 ring-1 ring-primary ring-inset',
+                        !event && !isDropTargetCell && 'bg-zinc-50 hover:bg-zinc-100'
+                      )}
+                      style={{
+                        padding: '4px',
+                        height: `${cellHeight}px`,
+                        width: `${cellWidth}px`,
+                        minWidth: `${cellWidth}px`
+                      }}
+                    >
+                      {event ? (
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, event.eventType)}
+                          onDragEnd={handleDragEnd}
+                          onClick={() => handleRemoveFromCell(event.eventType)}
+                          className={cn(
+                            'rounded font-bold text-white cursor-pointer truncate h-full flex items-center justify-center',
+                            getLabelColor(event.eventType),
+                            draggedLabel === event.eventType && 'opacity-50'
+                          )}
+                          style={{ fontSize: `${labelFontSize}px`, padding: '2px' }}
+                          title={`${getKoreanLabel(event.eventType)} (클릭하여 제거)`}
+                        >
+                          {getKoreanLabel(event.eventType)}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-300">-</span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // 라벨 목록 렌더링 함수
+  const renderLabels = (inModal: boolean) => (
+    <div className={inModal ? 'mb-4' : 'mb-2'}>
+      <div className={cn('text-muted-foreground mb-1.5', inModal ? 'text-xs' : 'text-[10px]')}>
+        미배치 라벨 ({unplacedLabels.length})
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {unplacedLabels.map((label) => (
+          <div
+            key={label}
+            draggable
+            onDragStart={(e) => handleDragStart(e, label)}
+            onDragEnd={handleDragEnd}
+            className={cn(
+              'rounded font-medium cursor-grab active:cursor-grabbing text-white',
+              getLabelColor(label),
+              draggedLabel === label && 'opacity-50',
+              inModal ? 'px-3 py-1.5 text-sm' : 'px-1.5 py-0.5 text-[10px]'
+            )}
+            title={label}
+          >
+            {getKoreanLabel(label)}
+          </div>
+        ))}
+        {unplacedLabels.length === 0 && availableLabels.length > 0 && (
+          <span className={cn('text-muted-foreground', inModal ? 'text-sm' : 'text-[10px]')}>모두 배치됨</span>
+        )}
+        {availableLabels.length === 0 && (
+          <span className={cn('text-muted-foreground', inModal ? 'text-sm' : 'text-[10px]')}>Vision App을 연결해주세요</span>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      {/* 인라인 미리보기 */}
+      <div className="mt-4 pt-4 border-t">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-medium text-muted-foreground">PLC 이벤트 설정</h3>
+            <button
+              onClick={onToggleExpand}
+              className="p-1 hover:bg-muted rounded transition-colors"
+              title="크게 보기"
+            >
+              <Maximize2 className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {saveStatus !== 'idle' && (
+              <span className={cn(
+                'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                saveStatus === 'saving' && 'bg-blue-100 text-blue-600',
+                saveStatus === 'saved' && 'bg-green-100 text-green-600',
+                saveStatus === 'error' && 'bg-red-100 text-red-600'
+              )}>
+                {saveStatus === 'saving' && '저장 중...'}
+                {saveStatus === 'saved' && '저장됨'}
+                {saveStatus === 'error' && '오류'}
+              </span>
+            )}
+            <button
+              onClick={() => navigate('/plc')}
+              className="text-[10px] px-2 py-1 bg-muted hover:bg-muted/80 rounded flex items-center gap-1 transition-colors"
+            >
+              <Settings2 className="h-3 w-3" />
+              연결 설정
+            </button>
+          </div>
+        </div>
+
+        {renderLabels(false)}
+
+        {/* 인라인 그리드 */}
+        <div className="border rounded-lg overflow-hidden">
+          <div className="px-2 py-1.5 bg-zinc-800 text-zinc-300 text-[11px] font-medium flex items-center justify-between">
+            <span>Bit Grid ({cameraSettings.baseAddress} ~ {addressRange.length}개)</span>
+            <span className="text-zinc-500 text-[10px]">← 좌우 스크롤 →</span>
+          </div>
+          {renderGrid(false)}
+        </div>
+      </div>
+
+      {/* 모달 팝업 */}
+      {isExpanded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onToggleExpand}>
+          <div
+            className="bg-background rounded-xl shadow-2xl w-[90vw] h-[85vh] max-w-6xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+              <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold">PLC 이벤트 설정</h2>
+                <span className="text-sm text-muted-foreground">
+                  {cameraSettings.baseAddress} ~ {addressRange.length}개 주소
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* 줌 컨트롤 */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
+                  <button
+                    onClick={() => setCellSize(Math.max(60, cellSize - 20))}
+                    className="p-1 hover:bg-background rounded transition-colors"
+                    title="축소"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </button>
+                  <span className="text-xs font-medium w-12 text-center">{cellSize}px</span>
+                  <button
+                    onClick={() => setCellSize(Math.min(150, cellSize + 20))}
+                    className="p-1 hover:bg-background rounded transition-colors"
+                    title="확대"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
+                </div>
+                {saveStatus !== 'idle' && (
+                  <span className={cn(
+                    'text-xs font-medium px-2 py-1 rounded',
+                    saveStatus === 'saving' && 'bg-blue-100 text-blue-600',
+                    saveStatus === 'saved' && 'bg-green-100 text-green-600',
+                    saveStatus === 'error' && 'bg-red-100 text-red-600'
+                  )}>
+                    {saveStatus === 'saving' && '저장 중...'}
+                    {saveStatus === 'saved' && '저장됨'}
+                    {saveStatus === 'error' && '오류'}
+                  </span>
+                )}
+                <button
+                  onClick={onToggleExpand}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
+                  title="닫기"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 내용 */}
+            <div className="flex-1 overflow-hidden p-6 flex flex-col">
+              {renderLabels(true)}
+
+              {/* 모달 그리드 */}
+              <div className="flex-1 border rounded-lg overflow-hidden flex flex-col">
+                <div className="px-4 py-2 bg-zinc-800 text-zinc-300 text-sm font-medium shrink-0">
+                  Bit Grid (16진수: 0-F)
+                </div>
+                {renderGrid(true)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

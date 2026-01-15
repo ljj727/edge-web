@@ -29,6 +29,7 @@ export const PLC_QUERY_KEYS = {
   // Camera-specific
   cameraSettings: (cameraId: string) => ['plc', 'cameras', cameraId, 'settings'] as const,
   cameraEvents: (cameraId: string) => ['plc', 'cameras', cameraId, 'events'] as const,
+  cameraAvailableEvents: (cameraId: string) => ['plc', 'cameras', cameraId, 'available-events'] as const,
 }
 
 // =============================================================================
@@ -136,6 +137,15 @@ export function useSeedPlcCameraEvents() {
     onSuccess: (_, cameraId) => {
       queryClient.invalidateQueries({ queryKey: PLC_QUERY_KEYS.cameraEvents(cameraId) })
     },
+  })
+}
+
+export function usePlcAvailableEvents(cameraId: string | null) {
+  return useQuery({
+    queryKey: PLC_QUERY_KEYS.cameraAvailableEvents(cameraId || ''),
+    queryFn: () => plcApi.getAvailableEvents(cameraId!),
+    enabled: !!cameraId,
+    staleTime: 30000,
   })
 }
 
