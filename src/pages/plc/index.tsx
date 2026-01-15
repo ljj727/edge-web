@@ -386,7 +386,7 @@ function PlcCameraGridSettingsPanel() {
           word_count: form.wordCount,
         },
       })
-      showToast('success', 'Grid 설정이 저장되었습니다')
+      showToast('success', '설정이 저장되었습니다')
     } catch (err) {
       showToast('error', '저장 실패')
     }
@@ -425,7 +425,7 @@ function PlcCameraGridSettingsPanel() {
       )}
 
       <div className="px-4 py-3 border-b flex items-center justify-between">
-        <h2 className="font-semibold">카메라별 Grid 설정</h2>
+        <h2 className="font-semibold">카메라별 설정</h2>
         {cameraSettings && (
           <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-600">
             설정됨
@@ -483,7 +483,7 @@ function PlcCameraGridSettingsPanel() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Word Count</label>
+                    <label className="block text-xs text-muted-foreground mb-1">주소 개수</label>
                     <input
                       type="number"
                       value={form.wordCount}
@@ -692,7 +692,7 @@ function PlcEventMonitorPanel() {
         <div className="bg-card rounded-xl border shadow-sm p-6">
           <div className="text-center text-muted-foreground">
             <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-            <p>선택한 카메라의 Grid 설정이 없습니다</p>
+            <p>선택한 카메라의 설정이 없습니다</p>
           </div>
         </div>
       </div>

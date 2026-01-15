@@ -14,13 +14,13 @@ import { cn } from '@shared/lib/cn'
 import { useAuthStore, useLogout } from '@features/auth'
 
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/videoStream', icon: Video, label: 'Video Stream' },
-  { to: '/cameraSettings', icon: Camera, label: 'Camera Settings' },
-  { to: '/aiSettings', icon: Brain, label: 'AI Settings' },
-  { to: '/statistics', icon: BarChart3, label: 'Statistics' },
+  { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
+  { to: '/videoStream', icon: Video, label: '실시간 영상' },
+  { to: '/cameraSettings', icon: Camera, label: 'Camera Settings', hidden: true },
+  { to: '/aiSettings', icon: Brain, label: 'AI 설정' },
+  { to: '/statistics', icon: BarChart3, label: 'Statistics', hidden: true },
   { to: '/plc', icon: Cpu, label: 'PLC' },
-  { to: '/systemInfo', icon: Settings, label: 'Settings' },
+  { to: '/systemInfo', icon: Settings, label: '시스템' },
 ]
 
 export function MainLayout() {
@@ -41,7 +41,7 @@ export function MainLayout() {
 
         {/* Navigation */}
         <nav className="flex items-center gap-1 flex-1">
-          {navItems.map((item) => (
+          {navItems.filter(item => !item.hidden).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

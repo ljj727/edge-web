@@ -106,7 +106,7 @@ export function AiSettingsPage() {
   return (
     <div className="h-full flex">
       {/* Left Sidebar - Camera List */}
-      <div className="w-72 border-r flex flex-col bg-muted/30">
+      <div className="w-56 border-r flex flex-col bg-muted/30">
         {/* Sidebar Header */}
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-3">
@@ -688,24 +688,8 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
         </div>
       )}
 
-      {/* Header */}
-      <div className="px-6 py-4 border-b flex items-center justify-between shrink-0">
-        <div>
-          <h2 className="text-xl font-semibold">{camera.name}</h2>
-          <p className="text-sm text-muted-foreground font-mono">{camera.id}</p>
-        </div>
-        <button
-          onClick={handleSaveEvent}
-          disabled={savingEvent}
-          className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-        >
-          <Save className="h-4 w-4" />
-          {savingEvent ? '저장 중...' : '이벤트 저장'}
-        </button>
-      </div>
-
       {/* Content */}
-      <div className="flex-1 overflow-hidden p-6">
+      <div className="flex-1 overflow-hidden p-4">
         <div ref={containerRef} className="h-full flex gap-0 relative">
           {/* Left Column - Preview */}
           <div
@@ -769,6 +753,16 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             className="overflow-y-auto space-y-4 pl-2"
             style={{ width: `${100 - previewWidth}%` }}
           >
+            {/* Save Button */}
+            <button
+              onClick={handleSaveEvent}
+              disabled={savingEvent}
+              className="w-full px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {savingEvent ? '저장 중...' : '이벤트 저장'}
+            </button>
+
             {/* Vision App (Read-only - 카메라 설정에서 변경) */}
             <div>
               <h3 className="text-xs font-medium text-muted-foreground mb-2">Vision App</h3>
@@ -1183,6 +1177,10 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
   }
 
   const handleDragOver = (e: React.DragEvent, address: string, bit: number) => {
+    // 이미 이벤트가 있는 셀에는 드롭 불가
+    const existingEvent = getEventAt(address, bit)
+    if (existingEvent) return
+
     e.preventDefault()
     setDropTarget({ address, bit })
   }
@@ -1195,6 +1193,14 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
     e.preventDefault()
     const label = e.dataTransfer.getData('text/plain')
     if (!label) return
+
+    // 이미 이벤트가 있는 셀에는 드롭 불가
+    const existingEvent = getEventAt(address, bit)
+    if (existingEvent) {
+      setDropTarget(null)
+      setDraggedLabel(null)
+      return
+    }
 
     setDropTarget(null)
     setDraggedLabel(null)
