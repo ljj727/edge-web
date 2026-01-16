@@ -16,16 +16,20 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     port: 4200,
+    strictPort: false,
+    allowedHosts: ['aict.snuailab.ai', '.snuailab.ai'],
     proxy: {
       '/api': {
-        target: 'http://localhost:8400',
+        target: 'http://localhost:33360',
         changeOrigin: true,
+        secure: false,
       },
       '/webrtc': {
-        target: 'http://localhost:8889',
+        target: 'http://localhost:33360',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/webrtc/, ''),
+        secure: false,
       },
     },
   },

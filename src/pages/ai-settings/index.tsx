@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Camera, RefreshCw, Video, Save,
   RotateCcw, Layers, Maximize2, X, ZoomIn, ZoomOut, Settings2,
-  Car, Truck, Bus, Bike, User, Dog, Cat, CircleDot, type LucideIcon, Brain
+  Car, Truck, Bus, Bike, User, Dog, Cat, CircleDot, type LucideIcon, Brain,
+  Square, Tag, Percent, Activity, MapPin, ArrowUpDown
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { connect, StringCodec } from 'nats.ws'
 import type { NatsConnection } from 'nats.ws'
-import { useCameras, useSyncCameras } from '@features/camera'
+import { useCameras, useSyncCameras, useCameraStore } from '@features/camera'
 import { useApps } from '@features/app'
 import { useInferencesByVideo, useUpdateEventSettings } from '@features/inference'
 import {
@@ -18,6 +19,24 @@ import {
 } from '@features/plc'
 import { cn } from '@shared/lib/cn'
 import type { Camera as CameraType, App } from '@shared/types'
+import type { Detection } from '@features/stream'
+
+// 20개 색상 팔레트 (class별 고정 색상)
+const CLASS_COLORS = [
+  '#f97316', '#f59e0b', '#84cc16', '#10b981', '#14b8a6',
+  '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#78716c',
+  '#71717a', '#64748b', '#0891b2', '#0d9488', '#7c3aed',
+]
+
+// class 이름 해시로 색상 할당
+const getClassColor = (className: string): string => {
+  const hash = className.toLowerCase().split('').reduce((acc, char) => {
+    return char.charCodeAt(0) + ((acc << 5) - acc)
+  }, 0)
+  const index = Math.abs(hash) % CLASS_COLORS.length
+  return CLASS_COLORS[index]
+}
 
 // Label 아이콘 및 이름 매핑
 const LABEL_CONFIG: Record<string, { icon: LucideIcon; name: string }> = {
@@ -196,6 +215,17 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
   // Detection preview
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [detections, setDetections] = useState<Detection[]>([])
+
+  // Display settings (shared with video stream page via store)
+  const displaySettings = useCameraStore((state) => state.displaySettings)
+  const setDisplaySettings = useCameraStore((state) => state.setDisplaySettings)
+  const settings = displaySettings[camera.id] || {}
+  const showBoundingBox = settings.showBoundingBox !== false
+  const showLabel = settings.showLabel !== false
+  const showScore = settings.showScore !== false
+  const showKeypoints = settings.showKeypoints !== false
+  const showEventSettings = settings.showEventSettings !== false
 
   // Resizer state
   const [previewWidth, setPreviewWidth] = useState(50) // percentage
@@ -221,6 +251,8 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
 
   const [activeElement, setActiveElement] = useState<ActiveElement>(null)
 
+  // Display settings popup state
+  const [settingsPopupOpen, setSettingsPopupOpen] = useState(false)
 
   // Saving states
   const [savingEvent, setSavingEvent] = useState(false)
@@ -312,18 +344,18 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
     }
   }, [inferences])
 
-  // Fetch thumbnail from NATS
+  // Fetch thumbnail from NATS - Real-time streaming
   useEffect(() => {
     if (!camera.nats_subject || !camera.nats_ws_url) return
     let cancelled = false
     const sc = StringCodec()
 
-    const fetchThumbnail = async () => {
+    const streamThumbnail = async () => {
       try {
         const nc = await connect({ servers: camera.nats_ws_url! })
         if (cancelled) { await nc.close(); return }
         ncRef.current = nc
-        const sub = nc.subscribe(camera.nats_subject!, { max: 1 })
+        const sub = nc.subscribe(camera.nats_subject!)
         for await (const msg of sub) {
           if (cancelled) break
           try {
@@ -331,6 +363,8 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             if (data.image) {
               const url = `data:image/jpeg;base64,${data.image}`
               setThumbnail(url)
+              const dets = data.detections || []
+              setDetections(dets)
               const img = new Image()
               img.onload = () => {
                 imageRef.current = img
@@ -349,14 +383,13 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             }
             img.src = url
           }
-          break
         }
       } catch {
-        // Silent fail for thumbnail fetch
+        // Silent fail for thumbnail stream
       }
     }
 
-    fetchThumbnail()
+    streamThumbnail()
     return () => { cancelled = true; ncRef.current?.close(); ncRef.current = null }
   }, [camera.nats_subject, camera.nats_ws_url])
 
@@ -366,6 +399,13 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    // Match canvas size to container (same as camera-view)
+    const rect = canvas.getBoundingClientRect()
+    if (canvas.width !== rect.width || canvas.height !== rect.height) {
+      canvas.width = rect.width
+      canvas.height = rect.height
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
@@ -382,8 +422,119 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
 
     const toCanvas = (p: [number, number]): [number, number] => [p[0] * canvas.width, p[1] * canvas.height]
 
+    // Draw detections (same as real-time video view)
+    if (detections.length > 0 && imageDimensions) {
+      // Calculate scale from original image to canvas
+      const scaleX = canvas.width / imageDimensions.width
+      const scaleY = canvas.height / imageDimensions.height
+
+      detections.forEach((det) => {
+        // Scale bbox coordinates from pixel to canvas
+        const x = det.bbox.x * scaleX
+        const y = det.bbox.y * scaleY
+        const width = det.bbox.width * scaleX
+        const height = det.bbox.height * scaleY
+
+        // Get color based on class
+        const color = getClassColor(det.class)
+
+        // Draw bounding box
+        if (showBoundingBox) {
+          ctx.strokeStyle = color
+          ctx.lineWidth = 2
+          ctx.strokeRect(x, y, width, height)
+        }
+
+        // Build label text
+        const labelParts: string[] = []
+        if (showLabel) labelParts.push(det.class)
+        if (showScore) labelParts.push(`${(det.confidence * 100).toFixed(0)}%`)
+        const label = labelParts.join(' ')
+
+        if (label) {
+          ctx.font = '14px sans-serif'
+          const textMetrics = ctx.measureText(label)
+          const textHeight = 18
+          const padding = 4
+
+          ctx.fillStyle = color
+          ctx.fillRect(
+            x,
+            y - textHeight - padding,
+            textMetrics.width + padding * 2,
+            textHeight + padding
+          )
+
+          ctx.fillStyle = '#ffffff'
+          ctx.fillText(label, x + padding, y - padding - 2)
+        }
+
+        // Draw keypoints as connected lines
+        if (showKeypoints && det.keypoints && det.keypoints.length > 0) {
+          try {
+            const kps = det.keypoints
+
+            // Draw lines connecting sequential keypoints
+            for (let i = 0; i < kps.length - 1; i++) {
+              const [x1, y1, conf1] = kps[i]
+              const [x2, y2, conf2] = kps[i + 1]
+
+              // Skip if either point has low confidence
+              if (conf1 < 0.3 || conf2 < 0.3) continue
+
+              // Keypoints are normalized (0-1), convert to canvas coords
+              const px1 = x1 * canvas.width
+              const py1 = y1 * canvas.height
+              const px2 = x2 * canvas.width
+              const py2 = y2 * canvas.height
+
+              // Line color based on average confidence
+              const avgConf = (conf1 + conf2) / 2
+              let lineColor = '#22c55e' // green
+              if (avgConf < 0.5) {
+                lineColor = '#ef4444' // red
+              } else if (avgConf < 0.7) {
+                lineColor = '#eab308' // yellow
+              }
+
+              ctx.beginPath()
+              ctx.moveTo(px1, py1)
+              ctx.lineTo(px2, py2)
+              ctx.strokeStyle = lineColor
+              ctx.lineWidth = 2
+              ctx.stroke()
+            }
+
+            // Draw points on top of lines
+            kps.forEach((kp) => {
+              const [kpX, kpY, kpConf] = kp
+              if (kpConf < 0.3) return
+
+              // Keypoints are normalized (0-1), convert to canvas coords
+              const px = kpX * canvas.width
+              const py = kpY * canvas.height
+
+              let kpColor = '#22c55e'
+              if (kpConf < 0.5) {
+                kpColor = '#ef4444'
+              } else if (kpConf < 0.7) {
+                kpColor = '#eab308'
+              }
+
+              ctx.beginPath()
+              ctx.arc(px, py, 4, 0, Math.PI * 2)
+              ctx.fillStyle = kpColor
+              ctx.fill()
+            })
+          } catch {
+            // Ignore keypoint drawing errors
+          }
+        }
+      })
+    }
+
     // Draw zone
-    if (zone.length > 0) {
+    if (showEventSettings && zone.length > 0) {
       const points = zone.map(toCanvas)
       const isActive = activeElement === 'zone'
       const isOtherActive = activeElement !== null && activeElement !== 'zone'
@@ -397,10 +548,16 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
       ctx.lineWidth = isActive ? 2 : 1
       ctx.stroke()
       if (isActive) {
-        points.forEach((p) => {
+        points.forEach((p, i) => {
           ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI * 2)
           ctx.fillStyle = '#3b82f6'; ctx.fill()
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke()
+          // Draw point number
+          ctx.fillStyle = '#fff'
+          ctx.font = 'bold 10px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(String(i + 1), p[0], p[1])
         })
       }
     }
@@ -498,9 +655,11 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
     const isLine1Active = activeElement === 'line1'
     const isLine2Active = activeElement === 'line2'
     const isAnyActive = activeElement !== null
-    drawLine(line1, line1Direction, '#f59e0b', isLine1Active, 'Line 1', line1WarningDistance, isAnyActive && !isLine1Active)
-    drawLine(line2, line2Direction, '#22c55e', isLine2Active, 'Line 2', line2WarningDistance, isAnyActive && !isLine2Active)
-  }, [zone, line1, line2, line1Direction, line2Direction, line1WarningDistance, line2WarningDistance, activeElement, thumbnail, imageDimensions])
+    if (showEventSettings) {
+      drawLine(line1, line1Direction, '#f59e0b', isLine1Active, 'Line 1', line1WarningDistance, isAnyActive && !isLine1Active)
+      drawLine(line2, line2Direction, '#22c55e', isLine2Active, 'Line 2', line2WarningDistance, isAnyActive && !isLine2Active)
+    }
+  }, [zone, line1, line2, line1Direction, line2Direction, line1WarningDistance, line2WarningDistance, activeElement, thumbnail, imageDimensions, detections, showBoundingBox, showLabel, showScore, showKeypoints, showEventSettings])
 
   // Canvas handlers - account for object-contain scaling
   const getMousePos = useCallback((e: React.MouseEvent<HTMLCanvasElement>): [number, number] => {
@@ -697,7 +856,7 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             style={{ width: `${previewWidth}%` }}
           >
             <div
-              className="relative bg-black rounded-xl overflow-hidden"
+              className="relative bg-black rounded-xl overflow-hidden group"
               style={{
                 aspectRatio: imageDimensions
                   ? `${imageDimensions.width} / ${imageDimensions.height}`
@@ -728,6 +887,19 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
                   {activeElement === 'zone' && zone.length >= 4 && (
                     <span className="text-gray-400 ml-2">• 우클릭으로 점 삭제</span>
                   )}
+                </div>
+              )}
+
+              {/* Display Settings Button */}
+              {thumbnail && (
+                <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => setSettingsPopupOpen(true)}
+                    className="bg-black/60 text-white p-1.5 rounded hover:bg-black/80 transition-colors"
+                    title="표시 설정"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
@@ -905,7 +1077,7 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
             {/* Zone Settings */}
             {activeElement === 'zone' && (() => {
               const selectedApp = apps.find(a => a.id === connectedAppId)
-              const availableLabels = selectedApp?.outputs?.map(o => o.label) || []
+              const availableLabels = selectedApp?.models?.[0]?.labels || []
               const isAllSelected = zoneTargets.includes('ALL')
 
               return (
@@ -1036,6 +1208,191 @@ function AiSettingsPanel({ camera, apps }: AiSettingsPanelProps) {
           </div>
         </div>
       </div>
+
+      {/* Display Settings Popup */}
+      {settingsPopupOpen && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/30"
+          onClick={() => setSettingsPopupOpen(false)}
+        >
+          <div
+            className="bg-card rounded-lg border p-4 w-72 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium">표시 설정</h3>
+              <button
+                onClick={() => setSettingsPopupOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  setDisplaySettings(camera.id, {
+                    ...settings,
+                    showBoundingBox: !showBoundingBox,
+                  })
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+                  showBoundingBox
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <Square className="w-4 h-4" />
+                <span className="text-sm">Bounding Box</span>
+                <div className="ml-auto">
+                  <div
+                    className={cn(
+                      'w-8 h-4 rounded-full transition-colors relative',
+                      showBoundingBox ? 'bg-blue-500' : 'bg-gray-300'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
+                        showBoundingBox ? 'translate-x-4' : 'translate-x-0.5'
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setDisplaySettings(camera.id, {
+                    ...settings,
+                    showLabel: !showLabel,
+                  })
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+                  showLabel
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <Tag className="w-4 h-4" />
+                <span className="text-sm">Label</span>
+                <div className="ml-auto">
+                  <div
+                    className={cn(
+                      'w-8 h-4 rounded-full transition-colors relative',
+                      showLabel ? 'bg-blue-500' : 'bg-gray-300'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
+                        showLabel ? 'translate-x-4' : 'translate-x-0.5'
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setDisplaySettings(camera.id, {
+                    ...settings,
+                    showScore: !showScore,
+                  })
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+                  showScore
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <Percent className="w-4 h-4" />
+                <span className="text-sm">Score</span>
+                <div className="ml-auto">
+                  <div
+                    className={cn(
+                      'w-8 h-4 rounded-full transition-colors relative',
+                      showScore ? 'bg-blue-500' : 'bg-gray-300'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
+                        showScore ? 'translate-x-4' : 'translate-x-0.5'
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setDisplaySettings(camera.id, {
+                    ...settings,
+                    showKeypoints: !showKeypoints,
+                  })
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+                  showKeypoints
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <Activity className="w-4 h-4" />
+                <span className="text-sm">Keypoints</span>
+                <div className="ml-auto">
+                  <div
+                    className={cn(
+                      'w-8 h-4 rounded-full transition-colors relative',
+                      showKeypoints ? 'bg-blue-500' : 'bg-gray-300'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
+                        showKeypoints ? 'translate-x-4' : 'translate-x-0.5'
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setDisplaySettings(camera.id, {
+                    ...settings,
+                    showEventSettings: !showEventSettings,
+                  })
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+                  showEventSettings
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <MapPin className="w-4 h-4" />
+                <span className="text-sm">Event Zone/Line</span>
+                <div className="ml-auto">
+                  <div
+                    className={cn(
+                      'w-8 h-4 rounded-full transition-colors relative',
+                      showEventSettings ? 'bg-blue-500' : 'bg-gray-300'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm',
+                        showEventSettings ? 'translate-x-4' : 'translate-x-0.5'
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1133,7 +1490,8 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
   const [draggedLabel, setDraggedLabel] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ address: string; bit: number } | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [cellSize, setCellSize] = useState(100) // 모달 셀 너비 (px)
+  const [cellSize, setCellSize] = useState(70) // 모달 셀 너비 (px)
+  const [bitOrder, setBitOrder] = useState<'asc' | 'desc'>('desc') // Bit 순서 (기본: 내림차순)
 
   // PLC data
   const { data: rawCameraSettings } = usePlcCameraSettings(cameraId)
@@ -1263,6 +1621,9 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
     const fontSize = inModal ? Math.max(12, cellSize / 6) : 12
     const labelFontSize = inModal ? Math.max(11, cellSize / 8) : 11
 
+    // Bit 순서 정렬 (내림차순이면 15->0, 오름차순이면 0->15)
+    const sortedBitRange = bitOrder === 'desc' ? [...BIT_RANGE].reverse() : BIT_RANGE
+
     return (
       <div className={cn(
         'overflow-x-auto',
@@ -1277,7 +1638,7 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
               >
                 ADDR
               </th>
-              {BIT_RANGE.map(bit => (
+              {sortedBitRange.map(bit => (
                 <th
                   key={bit}
                   className="text-center font-medium border-r border-zinc-600"
@@ -1301,7 +1662,7 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
                 >
                   {address.replace('D000', 'D')}
                 </td>
-                {BIT_RANGE.map(bit => {
+                {sortedBitRange.map(bit => {
                   const event = getEventAt(address, bit)
                   const isDropTargetCell = dropTarget?.address === address && dropTarget?.bit === bit
 
@@ -1396,10 +1757,11 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
             <h3 className="text-xs font-medium text-muted-foreground">PLC 이벤트 설정</h3>
             <button
               onClick={onToggleExpand}
-              className="p-1 hover:bg-muted rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
               title="크게 보기"
             >
-              <Maximize2 className="h-3 w-3 text-muted-foreground" />
+              <Maximize2 className="h-4 w-4" />
+              <span className="text-xs font-medium">크게 보기</span>
             </button>
           </div>
           <div className="flex items-center gap-2">
@@ -1430,8 +1792,17 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
         {/* 인라인 그리드 */}
         <div className="border rounded-lg overflow-hidden">
           <div className="px-2 py-1.5 bg-zinc-800 text-zinc-300 text-[11px] font-medium flex items-center justify-between">
-            <span>Bit Grid ({cameraSettings.baseAddress} ~ {addressRange.length}개)</span>
-            <span className="text-zinc-500 text-[10px]">← 좌우 스크롤 →</span>
+            <span>Bit ({cameraSettings.baseAddress} ~ {addressRange.length}개)</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setBitOrder(bitOrder === 'asc' ? 'desc' : 'asc')}
+                className="flex items-center gap-1 px-2 py-0.5 bg-zinc-700 hover:bg-zinc-600 rounded text-[10px] transition-colors"
+                title={bitOrder === 'desc' ? '오름차순으로 변경 (0→15)' : '내림차순으로 변경 (15→0)'}
+              >
+                <ArrowUpDown className="h-3 w-3" />
+                <span>{bitOrder === 'desc' ? '15→0' : '0→15'}</span>
+              </button>
+            </div>
           </div>
           {renderGrid(false)}
         </div>
@@ -1441,7 +1812,7 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
       {isExpanded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onToggleExpand}>
           <div
-            className="bg-background rounded-xl shadow-2xl w-[90vw] h-[85vh] max-w-6xl flex flex-col"
+            className="bg-background rounded-xl shadow-2xl w-[95vw] h-[88vh] max-w-7xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 모달 헤더 */}
@@ -1453,10 +1824,20 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
                 </span>
               </div>
               <div className="flex items-center gap-3">
+                {/* Bit 순서 전환 */}
+                <button
+                  onClick={() => setBitOrder(bitOrder === 'asc' ? 'desc' : 'asc')}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-lg transition-colors"
+                  title={bitOrder === 'desc' ? '오름차순으로 변경 (0→15)' : '내림차순으로 변경 (15→0)'}
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  <span className="text-xs font-medium">{bitOrder === 'desc' ? '15→0' : '0→15'}</span>
+                </button>
+
                 {/* 줌 컨트롤 */}
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
                   <button
-                    onClick={() => setCellSize(Math.max(60, cellSize - 20))}
+                    onClick={() => setCellSize(Math.max(40, cellSize - 5))}
                     className="p-1 hover:bg-background rounded transition-colors"
                     title="축소"
                   >
@@ -1464,7 +1845,7 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
                   </button>
                   <span className="text-xs font-medium w-12 text-center">{cellSize}px</span>
                   <button
-                    onClick={() => setCellSize(Math.min(150, cellSize + 20))}
+                    onClick={() => setCellSize(Math.min(150, cellSize + 5))}
                     className="p-1 hover:bg-background rounded transition-colors"
                     title="확대"
                   >
@@ -1500,7 +1881,7 @@ function PlcEventSettingsSection({ cameraId, isExpanded, onToggleExpand }: PlcEv
               {/* 모달 그리드 */}
               <div className="flex-1 border rounded-lg overflow-hidden flex flex-col">
                 <div className="px-4 py-2 bg-zinc-800 text-zinc-300 text-sm font-medium shrink-0">
-                  Bit Grid (16진수: 0-F)
+                  Bit (16진수: 0-F)
                 </div>
                 {renderGrid(true)}
               </div>

@@ -18,7 +18,7 @@ export function VideoStreamPage() {
 
   const selectedCameraIds = useCameraStore((state) => state.selectedCameraIds)
   const setSelectedCameraIds = useCameraStore((state) => state.setSelectedCameraIds)
-  const getDisplaySettings = useCameraStore((state) => state.getDisplaySettings)
+  const displaySettings = useCameraStore((state) => state.displaySettings)
   const setDisplaySettings = useCameraStore((state) => state.setDisplaySettings)
 
   // 표시 설정 팝업 상태
@@ -122,7 +122,7 @@ export function VideoStreamPage() {
             <div className="space-y-2">
               {DISPLAY_TOGGLES.map((toggle) => {
                 const Icon = toggle.icon
-                const settings = getDisplaySettings(settingsCameraId)
+                const settings = displaySettings[settingsCameraId] || {}
                 const isEnabled = settings[toggle.key] !== false
                 return (
                   <button

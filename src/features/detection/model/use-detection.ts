@@ -3,7 +3,7 @@ import { connect, StringCodec } from 'nats.ws'
 import type { NatsConnection, Subscription } from 'nats.ws'
 import type { DetectionObject, DetectionResult } from '@shared/types'
 
-const NATS_URL = 'ws://aict.snuailab.ai:20416'
+const NATS_URL = (window as any).__CONFIG__?.NATS_URL || 'ws://aict.snuailab.ai:20416'
 
 // How long to keep app detections before considering them stale (ms)
 const APP_STALE_TIMEOUT_MS = 500
